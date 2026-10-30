@@ -1,0 +1,26 @@
+[
+  {
+    "id": "adm-00000000-0000-4000-8000-000000000001",
+    "username": "admin",
+    "passwordHash": "b0b66e88d458da0317612a3aaf03229970f7c5fef7f32cb2b6bfc8d82b8bbede438c000723ba3133e1b2c6b8718ef58205901cd8e51685328053e56db40e44f7",
+    "salt": "f8a4e912c03b41d7e59a68c42b10df9e",
+    "twoFactorSecret": "JBSWY3DPEHPK3PXP",
+    "isTwoFactorEnabled": true,
+    "role": "SUPER_ADMIN",
+    "status": "ACTIVE",
+    "createdAt": 1793381359405,
+    "updatedAt": 1793381359405
+  },
+  {
+    "id": "adm-founder-0000-4000-8000-000000000001",
+    "username": "founder",
+    "passwordHash": "779785da2948c75bd5162c38fb9ff41db9adf465a19df2d68b5c5bcdcae31b04afca6fdc0afd6493b02916562aa96d91c83d6fddf254c5162f6ca7bef162f473",
+    "salt": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "twoFactorSecret": "",
+    "isTwoFactorEnabled": false,
+    "role": "FOUNDER",
+    "status": "ACTIVE",
+    "createdAt": 1793381359387,
+    "updatedAt": 1793381359387
+  }
+]

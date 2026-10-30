@@ -1,0 +1,21 @@
+{
+  "serviceUrl": "https://kms.custody-vault.internal/api/v1",
+  "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrbXMtdGVzdCJ9.sig123",
+  "providerType": "CUSTOM_KMS",
+  "isActive": false,
+  "timeoutMs": 5000,
+  "retryCount": 3,
+  "supportedAlgorithms": [
+    "Secp256k1",
+    "Ed25519",
+    "AES-256-GCM"
+  ],
+  "fallbackStrategy": "LOCAL_BACKUP",
+  "enforceHttps": false,
+  "updatedAt": 1793381357986,
+  "updatedBy": "SUPER_ADMIN",
+  "lastTestedAt": 1793365440165,
+  "lastStatus": "ONLINE",
+  "lastLatencyMs": 2,
+  "serverVersion": "v3.0.1-rust-native-enclave"
+}

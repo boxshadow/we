@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id
+  role           String          @default("USER")
+  status         String          @default("ACTIVE")
+  nickname       String?
+  avatar         String?
+  primaryChain   String
+  primaryAddress String
+  createdAt      BigInt
+  updatedAt      BigInt
+  lastLoginAt    BigInt
+  wallets        BoundWallet[]
+  depositOrders  DepositOrder[]
+  withdrawalOrders WithdrawalOrder[]
+  balances       UserBalance[]
+
+  @@map("users")
+}
+
+model BoundWallet {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  chain     String
+  address   String
+  networkId String?  @map("network_id")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  boundAt   BigInt   @map("bound_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chain, address])
+  @@index([userId])
+  @@map("bound_wallets")
+}
+
+// 1. 管理后台配置的多链充值收款专属钱包池 (分为 EVM, SOLANA, TRON 三大类，EVM 共享地址池)
+model ConfiguredDepositWallet {
+  id        String   @id @default(uuid())
+  networkId String?  @map("network_id") // 可选关联特定网络，留空则通用属于对应 chain 生态
+  chain     String   // EVM, SOLANA, TRON
+  address   String   // 收款地址
+  label     String?  // 钱包备注标签 (如: EVM 核心充值金库 01)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt BigInt   @map("created_at")
+  updatedAt BigInt   @map("updated_at")
+
+  @@unique([chain, address])
+  @@index([chain])
+  @@map("configured_deposit_wallets")
+}
+
+// 7. 管理后台配置的多链提现出金热钱包池 (分为 EVM, SOLANA, TRON 三大组)
+model ConfiguredWithdrawWallet {
+  id          String   @id @default(uuid())
+  chain       String   // EVM, SOLANA, TRON
+  address     String   // 出款热钱包地址
+  label       String?  // 备注标签 (如: EVM 出资热钱包 01)
+  balance     String   @default("0") // 实时/缓存估算余额
+  dailyLimit  String   @default("100000") @map("daily_limit") // 单日出金限额
+  spentToday  String   @default("0") @map("spent_today") // 今日已出金
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   BigInt   @map("created_at")
+  updatedAt   BigInt   @map("updated_at")
+
+  @@unique([chain, address])
+  @@index([chain])
+  @@map("configured_withdraw_wallets")
+}
+
+// 2. 管理后台配置的支持代币 (包括 Token 名字、符号、合约地址、精度等)
+model SupportedToken {
+  id              String   @id @default(uuid())
+  networkId       String   @map("network_id")
+  symbol          String   // 如: USDT, USDC, ETH, SOL, TRX
+  name            String   // 如: Tether USD
+  contractAddress String?  @map("contract_address") // 原生代币为 null，合约代币为地址
+  decimals        Int      @default(18)
+  icon            String?
+  minDeposit      String   @default("0.01") @map("min_deposit")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       BigInt   @map("created_at")
+  updatedAt       BigInt   @map("updated_at")
+
+  @@unique([networkId, symbol])
+  @@index([networkId])
+  @@map("supported_tokens")
+}
+
+// 3. 用户多链各 Token 余额表 (每个 Token 的余额单独存放)
+model UserBalance {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  networkId    String   @map("network_id")
+  tokenSymbol  String   @map("token_symbol")
+  tokenAddress String?  @map("token_address")
+  balance      String   @default("0") // BigNumber 字符串表示，确保无精度损失
+  updatedAt    BigInt   @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, networkId, tokenSymbol])
+  @@index([userId])
+  @@map("user_balances")
+}
+
+// 4. 用户充值订单表 (支持直接加签支付、txHash 验证与链上进度匹配)
+model DepositOrder {
+  id             String   @id
+  userId         String?  @map("user_id")
+  network        String
+  tokenSymbol    String?  @map("token_symbol")
+  tokenAddress   String?  @map("token_address")
+  depositAddress String   @map("deposit_address")
+  amount         String   // 预期充值金额
+  actualAmount   String?  @map("actual_amount") // 实际链上到账金额
+  status         String   @default("PENDING") // PENDING, CONFIRMING, CONFIRMED, EXPIRED, FAILED
+  txHash         String?  @map("tx_hash")
+  fromAddress    String?  @map("from_address")
+  rawTxData      String?  @map("raw_tx_data") // 存储服务端给出的未签名交易 payload (JSON)
+  blockNumber    BigInt?  @map("block_number")
+  confirmations  Int?     @default(0)
+  credited       Boolean  @default(false) // 是否已完成余额入账结算
+  createdAt      BigInt   @map("created_at")
+  expiresAt      BigInt   @map("expires_at")
+  confirmedAt    BigInt?  @map("confirmed_at")
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([depositAddress])
+  @@index([userId])
+  @@index([txHash])
+  @@map("deposit_orders")
+}
+
+// 5. 资金归集划转审计账本
+model SweepRecord {
+  id                 String   @id
+  network            String
+  fromDepositWallet  String   @map("from_deposit_wallet")
+  toTargetAddress    String   @map("to_target_address")
+  amount             String
+  tokenAddress       String?  @map("token_address")
+  txHash             String   @map("tx_hash")
+  status             String   @default("SUCCESS")
+  timestamp          BigInt
+
+  @@index([fromDepositWallet])
+  @@index([toTargetAddress])
+  @@map("sweep_records")
+}
+
+// 6. 用户提现出金订单表 (服务端发起链上转账出资)
+model WithdrawalOrder {
+  id             String   @id
+  userId         String   @map("user_id")
+  network        String
+  tokenSymbol    String   @map("token_symbol")
+  tokenAddress   String?  @map("token_address")
+  fromVault      String   @map("from_vault") // 服务端出资热钱包地址
+  toAddress      String   @map("to_address") // 用户接收提现地址
+  amount         String   // 提现金额
+  fee            String   @default("0") // 手续费
+  status         String   @default("PENDING") // PENDING, PROCESSING, CONFIRMED, FAILED
+  txHash         String?  @map("tx_hash")
+  blockNumber    BigInt?  @map("block_number")
+  confirmations  Int?     @default(0)
+  errorMessage   String?  @map("error_message")
+  createdAt      BigInt   @map("created_at")
+  confirmedAt    BigInt?  @map("confirmed_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([toAddress])
+  @@index([txHash])
+  @@map("withdrawal_orders")
+}

@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Compiled outputs
+dist/
+dist-ssr/
+target/
+*.tsbuildinfo
+
+# Environment and sensitive files
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Database
+*.db
+*.db-journal
+prisma/*.db*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and Editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.nyc_output/

@@ -1,0 +1,31 @@
+[package]
+name = "multichain-kms-vault"
+version = "0.1.0"
+edition = "2021"
+description = "Web3 机构级自建多链加签与密钥保护微服务 (Rust Native Security Enclave)"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha3 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+bs58 = "0.5"
+base64 = "0.22"
+zeroize = { version = "1.7", features = ["derive"] }
+jsonwebtoken = "9.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

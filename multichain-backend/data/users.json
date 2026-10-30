@@ -1,0 +1,70 @@
+[
+  {
+    "id": "3e795879-7b6e-4811-8d9f-ae3bc3b85dfb",
+    "role": "USER",
+    "status": "ACTIVE",
+    "nickname": "User_TokenPocket_Demo",
+    "primaryWallet": {
+      "chain": "EVM",
+      "address": "0x36b8a47da48830b42a04156ec6990b015ffbfa39"
+    },
+    "wallets": [
+      {
+        "chain": "EVM",
+        "address": "0x36b8a47da48830b42a04156ec6990b015ffbfa39",
+        "networkId": "ethereum",
+        "isPrimary": true,
+        "boundAt": 1791437442031
+      },
+      {
+        "chain": "SOLANA",
+        "address": "j4ffwauwstsgjgdt6om6tnjg335gjwcb53dzpxes9vhc",
+        "isPrimary": false,
+        "boundAt": 1791437458443
+      },
+      {
+        "chain": "TRON",
+        "address": "trxbmxahaxhtcasdxvyf1fkvp1wxgclsrh",
+        "isPrimary": false,
+        "boundAt": 1791437469848
+      }
+    ],
+    "createdAt": 1791437442031,
+    "updatedAt": 1793381156093,
+    "lastLoginAt": 1793381156093
+  },
+  {
+    "id": "a0000000-0000-4000-8000-000000000001",
+    "role": "ADMIN",
+    "status": "ACTIVE",
+    "nickname": "Admin_Master",
+    "primaryWallet": {
+      "chain": "EVM",
+      "address": "0x1111111111111111111111111111111111111111"
+    },
+    "wallets": [
+      {
+        "chain": "EVM",
+        "address": "0x1111111111111111111111111111111111111111",
+        "networkId": "ethereum",
+        "isPrimary": true,
+        "boundAt": 1791400000000
+      },
+      {
+        "chain": "TRON",
+        "address": "t9yd14nj9j7xab4dbgeix9h8unkkhxuwwb",
+        "isPrimary": false,
+        "boundAt": 1791400001000
+      },
+      {
+        "chain": "SOLANA",
+        "address": "solanaaddress111111111111111111111111111111",
+        "isPrimary": false,
+        "boundAt": 1793199492646
+      }
+    ],
+    "createdAt": 1791400000000,
+    "updatedAt": 1793202299862,
+    "lastLoginAt": 1793202299862
+  }
+]

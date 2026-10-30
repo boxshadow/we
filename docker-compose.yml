@@ -1,0 +1,68 @@
+services:
+  # =========================================================================
+  # 1. Rust Native KMS Security Enclave (独立物理签名微服务)
+  # =========================================================================
+  kms-vault:
+    build:
+      context: ./multichain-kms-vault
+      dockerfile: Dockerfile
+    container_name: multichain-kms-vault
+    restart: unless-stopped
+    ports:
+      # 仅绑定宿主机本地回环 127.0.0.1，外部公网无法扫描探测
+      - "127.0.0.1:8550:8550"
+    environment:
+      - VAULT_HOST=0.0.0.0
+      - VAULT_PORT=8550
+      - RUST_LOG=info
+      - ENFORCE_HTTPS=false
+      - MAX_TX_AMOUNT_USDT=50000.0
+      - VAULT_JWT_SECRET=multichain-kms-super-secret-jwt-key-2026
+    security_opt:
+      # 安全加固：禁止容器内提权
+      - no-new-privileges:true
+    networks:
+      - vault-internal-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8550/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # =========================================================================
+  # 2. Multi-chain Web3 Backend (NestJS 充提编排与双轨对账引擎)
+  # =========================================================================
+  backend:
+    build:
+      context: ./multichain-backend
+      dockerfile: Dockerfile
+    container_name: multichain-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # 容器间通过内部网络直接寻址 kms-vault
+      - REMOTE_SIGNER_ENDPOINT=http://kms-vault:8550
+      - DATABASE_URL=file:/app/prisma/dev.db
+    volumes:
+      - ./multichain-backend/data:/app/data
+      - ./multichain-backend/prisma:/app/prisma
+    depends_on:
+      kms-vault:
+        condition: service_healthy
+    networks:
+      - vault-internal-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/transfer/workflow/reconciliation/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  vault-internal-net:
+    driver: bridge
+    internal: false

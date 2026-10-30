@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Web3 多链身份认证平台 (Connect Wallet)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    pre, code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+    /* Mobile safe-area utilities */
+    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    /* Touch scroll smoothing */
+    .touch-scroll { -webkit-overflow-scrolling: touch; }
+  </style>
+  <!-- Load Local Bundled Official WalletConnect Provider SDK -->
+  <script src="/wc-bundle.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden">
+  <!-- Top Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur-md sticky top-0 z-50 px-3.5 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2">
+    <div class="flex items-center space-x-2.5 sm:space-x-3 overflow-hidden min-w-0">
+      <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-bold text-white text-base sm:text-lg shrink-0">
+        W3
+      </div>
+      <div class="overflow-hidden min-w-0">
+        <h1 class="text-sm sm:text-base font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent truncate">
+          Web3 多链身份认证
+        </h1>
+        <p class="hidden md:block text-[11px] text-slate-400 truncate">PC 端展示已安装钱包 · 移动钱包 App 展示连接网络 · EIP-4361 SIWE</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+      <!-- Top Connect Wallet Trigger (When logged in shows address, when disconnected shows Connect button) -->
+      <div id="header-auth-container" class="flex items-center space-x-1 sm:space-x-2">
+        <button id="btn-header-connect" onclick="openConnectModal()" class="text-xs px-2.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold shadow-lg shadow-cyan-500/20 transition flex items-center space-x-1">
+          <span>⚡</span><span class="hidden sm:inline">连接钱包 (Connect)</span><span class="sm:hidden">连接</span>
+        </button>
+      </div>
+
+      <a href="/admin" class="text-xs px-2 sm:px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 transition border border-slate-700 flex items-center space-x-1 font-medium" title="管理后台控制台">
+        <span>⚙️</span><span class="hidden sm:inline">管理中台</span>
+      </a>
+      <a href="/api/docs" target="_blank" class="hidden sm:flex text-xs px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition border border-slate-700 font-medium items-center space-x-1">
+        <span>📖</span><span>API</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-3.5 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+    <!-- Left Column: Actions & Auth (7 cols) -->
+    <div class="lg:col-span-7 space-y-5 sm:space-y-6">
+      
+      <!-- Card 1: 登录入口卡片与环境状态 -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
+        <div class="absolute -right-16 -top-16 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+        
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-3">
+          <h2 class="text-base sm:text-lg font-bold text-white flex items-center">
+            <span class="h-2.5 w-2.5 rounded-full bg-cyan-400 mr-2.5 animate-pulse shrink-0"></span>
+            <span>步骤 1：连接 Web3 钱包并签名登录</span>
+          </h2>
+          <!-- Environment simulation switcher for testing -->
+          <div class="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] self-start sm:self-auto shrink-0">
+            <span class="text-slate-500 px-1.5">环境:</span>
+            <button id="env-btn-pc" onclick="switchEnvironment('PC')" class="px-2 py-0.5 rounded-lg bg-blue-950 text-cyan-300 border border-blue-800 font-medium">
+              🖥️ PC
+            </button>
+            <button id="env-btn-app" onclick="switchEnvironment('APP')" class="px-2 py-0.5 rounded-lg text-slate-400 hover:text-slate-200 font-medium">
+              📱 App 内
+            </button>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-400 mb-4 sm:mb-5 leading-relaxed">
+          响应式感知当前运行环境：<strong>PC 桌面展示已安装钱包列表；手机钱包 App 内直接展示连接公链</strong>，选定后原生拉起签名授权。
+        </p>
+
+        <!-- Current Login Status Box -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 sm:p-4 mb-4 sm:mb-5 text-xs space-y-2">
+          <div class="flex justify-between items-center gap-2">
+            <span class="text-slate-400 shrink-0">环境感知：</span>
+            <span id="detected-env-label" class="font-mono text-cyan-400 font-semibold flex items-center truncate text-[11px] sm:text-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 mr-1.5 animate-pulse shrink-0"></span>
+              🖥️ PC 桌面浏览器 (先选钱包，再选公链)
+            </span>
+          </div>
+          <div class="flex justify-between items-center gap-2">
+            <span class="text-slate-400 shrink-0">已登录主地址：</span>
+            <span id="current-wallet-address" class="font-mono text-slate-300 truncate max-w-[170px] xs:max-w-[220px] sm:max-w-[320px]">未连接</span>
+          </div>
+          <div class="flex justify-between items-center gap-2">
+            <span class="text-slate-400 shrink-0">当前活跃公链：</span>
+            <span id="current-network-label" class="font-mono text-slate-300 truncate max-w-[170px] xs:max-w-[220px] sm:max-w-[320px]">Ethereum Mainnet (Chain ID: 1)</span>
+          </div>
+        </div>
+
+        <!-- Big Action Connect Wallet Button -->
+        <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+          <button id="btn-main-connect" onclick="openConnectModal()" class="flex-1 py-3 sm:py-3.5 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2">
+            <span>⚡</span>
+            <span id="btn-main-connect-text">连接钱包 (Connect Wallet)</span>
+          </button>
+          <button onclick="handleDisconnect()" class="py-3 sm:py-3.5 px-4 sm:px-5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-[0.99] text-slate-300 font-medium text-xs sm:text-sm transition">
+            断开 / 退出
+          </button>
+        </div>
+
+        <!-- Status & Error Alert Container -->
+        <div id="login-alert-box" class="hidden mt-4 p-3 rounded-xl border text-xs flex items-start space-x-2.5">
+          <span id="login-alert-icon" class="text-base shrink-0">⚠️</span>
+          <div class="flex-1 min-w-0">
+            <div id="login-alert-title" class="font-semibold mb-0.5">提示</div>
+            <div id="login-alert-desc" class="text-slate-300 leading-relaxed font-mono text-[11px] break-all"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: 多链钱包绑定测试 (当已登录主账号时可用) -->
+      <div id="card-bind" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl relative opacity-50 pointer-events-none transition-all duration-300">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center">
+          <span class="h-2 w-2 rounded-full bg-indigo-400 mr-2.5"></span>
+          步骤 2：多链身份打通 —— 直接唤起绑定新公链钱包至当前主账号
+        </h2>
+        <p class="text-xs text-slate-400 mb-5">
+          在已登录的主账号下，直接唤起并绑定另一条链的钱包（例如 EVM 主账号下绑定 Solana 或 Tron 钱包，亦或新 EVM 地址）。下次直接用绑定的任何一个链钱包登录，系统都能自动聚合识别为该主账号！
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
+          <button onclick="handleBindTargetWallet('EVM')" class="py-3 px-4 rounded-xl border border-blue-500/40 bg-blue-950/30 hover:bg-blue-950/60 text-blue-300 text-sm font-medium flex items-center justify-center space-x-2 transition">
+            <span>🔷 绑定 EVM 钱包</span>
+          </button>
+          <button onclick="handleBindTargetWallet('SOLANA')" class="py-3 px-4 rounded-xl border border-indigo-500/40 bg-indigo-950/30 hover:bg-indigo-950/60 text-indigo-300 text-sm font-medium flex items-center justify-center space-x-2 transition">
+            <span>🟣 绑定 Solana 钱包</span>
+          </button>
+          <button onclick="handleBindTargetWallet('TRON')" class="py-3 px-4 rounded-xl border border-red-500/40 bg-red-950/30 hover:bg-red-950/60 text-red-300 text-sm font-medium flex items-center justify-center space-x-2 transition">
+            <span>🔴 绑定 Tron 钱包</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Card 3: 登录主账号信息与多链资产聚合展示 -->
+      <div id="card-profile" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-white flex items-center">
+            <span class="h-2 w-2 rounded-full bg-emerald-400 mr-2.5"></span>
+            当前主账号画像 (Master Account)
+          </h2>
+          <span id="user-role-badge" class="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-950 text-blue-300 border border-blue-800">
+            USER
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-5">
+          <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span class="text-slate-500 block mb-1">主账号用户 ID (UUID):</span>
+            <span id="user-id" class="font-mono text-cyan-400 font-medium">--</span>
+          </div>
+          <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+            <span class="text-slate-500 block mb-1">注册初始钱包:</span>
+            <span id="user-primary-wallet" class="font-mono text-slate-200">--</span>
+          </div>
+        </div>
+
+        <h3 class="text-sm font-semibold text-slate-300 mb-3">名下已绑定的多链钱包列表 (Wallets):</h3>
+        <div id="bound-wallets-list" class="space-y-2 mb-5">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Token actions -->
+        <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-800">
+          <button onclick="handleRefreshToken()" class="text-xs px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">
+            🔄 刷新 JWT 访问令牌
+          </button>
+          <button onclick="handleFetchProfile()" class="text-xs px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">
+            👤 重新拉取 /api/auth/me
+          </button>
+          <button onclick="copyAccessToken()" class="text-xs px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 font-medium transition">
+            📋 复制 Access Token
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Live Inspector & Logs (5 cols) -->
+    <div class="lg:col-span-5 space-y-6">
+      
+      <!-- Network Console Logs -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col h-[720px]">
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-800">
+          <h2 class="text-sm font-bold text-slate-200 flex items-center">
+            <span class="h-2 w-2 rounded-full bg-emerald-400 mr-2"></span>
+            实时网络交互控制台 (Live Network Inspector)
+          </h2>
+          <button onclick="clearLogs()" class="text-xs text-slate-500 hover:text-slate-300 transition">
+            清空日志
+          </button>
+        </div>
+
+        <!-- Log entries scroll container -->
+        <div id="console-logs" class="flex-1 overflow-y-auto space-y-3 font-mono text-xs pr-1">
+          <div class="text-slate-500 italic">等待操作发起...</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ==================== Web3 响应式连接弹窗 (Connect Modal: 先钱包后公链) ==================== -->
+  <div id="connect-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <div>
+          <h3 id="modal-title" class="text-base font-bold text-white flex items-center space-x-2">
+            <span>⚡ 步骤 1：选择 Web3 钱包 (Select Wallet)</span>
+          </h3>
+          <p id="modal-subtitle" class="text-xs text-slate-400 mt-0.5">
+            优先排序列出已安装的扩展钱包，支持选择后按公链交集授权登录
+          </p>
+        </div>
+        <button onclick="closeConnectModal()" class="text-slate-400 hover:text-white text-xl p-1 rounded-lg hover:bg-slate-800 transition">✕</button>
+      </div>
+
+      <!-- STEP 1: 选择钱包列表 (Select Wallet) -->
+      <div id="modal-step-wallets" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-slate-300">请选择您要连接的钱包 (优先展示已检测到)：</label>
+          <span class="text-[10px] text-cyan-400 font-mono">EIP-6963 原生感知</span>
+        </div>
+        <div class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1" id="modal-wallet-list">
+          <!-- Dynamically populated with sorted wallet cards -->
+        </div>
+      </div>
+
+      <!-- STEP 2: 选择支持的公链列表 (Intersection: 钱包支持 ∩ 平台支持) -->
+      <div id="modal-step-networks" class="space-y-4 hidden">
+        <!-- Back button & Selected wallet banner -->
+        <div>
+          <button onclick="backToWalletStep()" class="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center space-x-1 mb-2.5 transition">
+            <span>&larr;</span>
+            <span>返回重新选择其他钱包</span>
+          </button>
+          
+          <div id="selected-wallet-banner" class="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 flex items-center justify-between">
+            <!-- Selected wallet info here -->
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-semibold text-slate-300">
+              请选择要连接的公链 (Select Chain)：
+            </label>
+            <span id="chains-intersection-count" class="text-[10px] text-emerald-400 font-medium bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/80">
+              交集公链: 0 条
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-3" id="chains-intersection-desc">
+            已过滤出【该钱包支持 ∩ 平台支持】的公链列表，点击直接调起原生签名：
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[320px] overflow-y-auto pr-1" id="modal-intersection-networks-list">
+            <!-- Dynamically populated intersection networks -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer Status -->
+      <div class="mt-5 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+        <span id="modal-status-text" class="truncate pr-2">💡 选择钱包与网络后直接唤起原生授权签名</span>
+        <button onclick="closeConnectModal()" class="text-slate-500 hover:text-slate-300 transition shrink-0">
+          关闭
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ==================== 全局状态与配置 ====================
+    let detectedEnvironment = 'PC'; // 'PC' | 'APP'
+    let supportedNetworks = [];
+    let selectedNetworkId = 'ethereum';
+    const eip6963Providers = new Map();
+    let currentSession = {
+      accessToken: localStorage.getItem('w3_access_token') || null,
+      refreshToken: localStorage.getItem('w3_refresh_token') || null,
+      user: null
+    };
+
+    // 默认内置网络映射 (若 /api/networks 未拉取到时回退)
+    const DEFAULT_NETWORKS = [
+      { id: 'ethereum', name: 'Ethereum', family: 'EVM', chainId: 1, chainIdHex: '0x1', symbol: 'ETH', icon: '🔷', rpc: 'https://ethereum-rpc.publicnode.com', explorer: 'https://etherscan.io' },
+      { id: 'bsc', name: 'BNB Chain', family: 'EVM', chainId: 56, chainIdHex: '0x38', symbol: 'BNB', icon: '🟡', rpc: 'https://bsc-dataseed.binance.org', explorer: 'https://bscscan.com' },
+      { id: 'base', name: 'Base', family: 'EVM', chainId: 8453, chainIdHex: '0x2105', symbol: 'ETH', icon: '🔵', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org' },
+      { id: 'arbitrum', name: 'Arbitrum', family: 'EVM', chainId: 42161, chainIdHex: '0xa4b1', symbol: 'ETH', icon: '🔷', rpc: 'https://arb1.arbitrum.io/rpc', explorer: 'https://arbiscan.io' },
+      { id: 'polygon', name: 'Polygon', family: 'EVM', chainId: 137, chainIdHex: '0x89', symbol: 'POL', icon: '🟣', rpc: 'https://polygon-rpc.com', explorer: 'https://polygonscan.com' },
+      { id: 'solana', name: 'Solana', family: 'SOLANA', chainId: null, symbol: 'SOL', icon: '🟣', explorer: 'https://solscan.io' },
+      { id: 'tron', name: 'TRON', family: 'TRON', chainId: null, symbol: 'TRX', icon: '🔴', explorer: 'https://tronscan.org' }
+    ];
+
+    // 已知主流钱包清单 (TokenPocket TP 钱包优先支持)
+    const KNOWN_WALLETS = [
+      {
+        id: 'tokenpocket',
+        name: 'TokenPocket',
+        sub: 'TP 钱包 (多链支持: EVM · TRON · Solana)',
+        families: ['EVM', 'TRON', 'SOLANA'],
+        icon: '🔷',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#2980FE"/><path d="M10 11C10 9.89543 10.8954 9 12 9H24C25.1046 9 26 9.89543 26 11V15C26 16.1046 25.1046 17 24 17H20V26C20 26.5523 19.5523 27 19 27H17C16.4477 27 16 26.5523 16 26V17H12C10.8954 17 10 16.1046 10 15V11Z" fill="white"/></svg>`,
+        rdns: 'vip.tokenpocket',
+        downloadUrl: 'https://www.tokenpocket.pro/',
+        detect: () => {
+          const ua = (navigator.userAgent || '').toLowerCase();
+          return !!(
+            window.tokenpocket ||
+            window.ethereum?.isTokenPocket ||
+            window.ethereum?.isTp ||
+            window.solana?.isTokenPocket ||
+            window.tronWeb?.isTokenPocket ||
+            window.tronLink?.isTokenPocket ||
+            (window.tronWeb && window.tokenpocket) ||
+            eip6963Providers.has('vip.tokenpocket') ||
+            eip6963Providers.has('vip.tokenpocket.wallet') ||
+            eip6963Providers.has('tokenpocket') ||
+            ua.includes('tokenpocket')
+          );
+        },
+        getProvider: (family) => {
+          if (family === 'TRON') {
+            return window.tokenpocket?.tronWeb || (window.tronWeb?.isTokenPocket ? window.tronWeb : null) || window.tronWeb || window.tronLink;
+          }
+          if (family === 'SOLANA') {
+            return window.tokenpocket?.solana || (window.solana?.isTokenPocket ? window.solana : null) || window.solana;
+          }
+          // EVM
+          return eip6963Providers.get('vip.tokenpocket')?.provider ||
+                 eip6963Providers.get('vip.tokenpocket.wallet')?.provider ||
+                 eip6963Providers.get('tokenpocket')?.provider ||
+                 window.tokenpocket?.ethereum ||
+                 (window.ethereum?.isTokenPocket ? window.ethereum : null) ||
+                 (window.ethereum?.providers?.find(p => p.isTokenPocket)) ||
+                 window.ethereum;
+        }
+      },
+      {
+        id: 'metamask',
+        name: 'MetaMask',
+        sub: '小狐狸钱包 (仅支持 EVM 兼容公链)',
+        families: ['EVM'],
+        icon: '🦊',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#F6851B" fill-opacity="0.2"/><path d="M26 11L18 17L19.5 13L26 11Z" fill="#E2761B"/><path d="M10 11L18 17L16.5 13L10 11Z" fill="#E4761B"/><path d="M24 23L21.5 26.5L25.5 27.5L26.5 23L24 23Z" fill="#E4761B"/><path d="M12 23L14.5 26.5L10.5 27.5L9.5 23L12 23Z" fill="#E4761B"/><circle cx="18" cy="18" r="3" fill="#F6851B"/></svg>`,
+        rdns: 'io.metamask',
+        downloadUrl: 'https://metamask.io/download/',
+        detect: () => {
+          if (window.ethereum?.isTokenPocket && !eip6963Providers.has('io.metamask') && !window.ethereum?.providers?.some(p => p.isMetaMask && !p.isTokenPocket)) {
+            return false;
+          }
+          return !!(window.ethereum?.isMetaMask || eip6963Providers.has('io.metamask'));
+        },
+        getProvider: () => eip6963Providers.get('io.metamask')?.provider || (window.ethereum?.isMetaMask && !window.ethereum?.isTokenPocket ? window.ethereum : window.ethereum?.providers?.find(p => p.isMetaMask && !p.isTokenPocket) || window.ethereum)
+      },
+      {
+        id: 'okx',
+        name: 'OKX Wallet',
+        sub: '欧易 Web3 钱包 (多链: EVM · TRON · Solana)',
+        families: ['EVM', 'SOLANA', 'TRON'],
+        icon: '⬛',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#000000"/><rect x="9" y="9" width="6" height="6" fill="white"/><rect x="21" y="9" width="6" height="6" fill="white"/><rect x="15" y="15" width="6" height="6" fill="white"/><rect x="9" y="21" width="6" height="6" fill="white"/><rect x="21" y="21" width="6" height="6" fill="white"/></svg>`,
+        rdns: 'com.okex.wallet',
+        downloadUrl: 'https://www.okx.com/web3',
+        detect: () => !!(window.okxwallet || eip6963Providers.has('com.okex.wallet')),
+        getProvider: (family) => {
+          if (family === 'SOLANA') return window.okxwallet?.solana;
+          if (family === 'TRON') return window.okxwallet?.tronWeb || window.tronWeb;
+          return eip6963Providers.get('com.okex.wallet')?.provider || window.okxwallet?.ethereum || window.okxwallet;
+        }
+      },
+      {
+        id: 'phantom',
+        name: 'Phantom',
+        sub: '幻影钱包 (主要支持 Solana 及 EVM)',
+        families: ['SOLANA', 'EVM'],
+        icon: '🟣',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#AB9FF2" fill-opacity="0.2"/><circle cx="18" cy="18" r="9" fill="#AB9FF2"/><circle cx="15.5" cy="17" r="1.5" fill="#1C182A"/><circle cx="20.5" cy="17" r="1.5" fill="#1C182A"/></svg>`,
+        rdns: 'app.phantom',
+        downloadUrl: 'https://phantom.app/download',
+        detect: () => !!(window.phantom || window.solana?.isPhantom || eip6963Providers.has('app.phantom')),
+        getProvider: (family) => {
+          if (family === 'SOLANA') return window.phantom?.solana || window.solana;
+          return eip6963Providers.get('app.phantom')?.provider || window.phantom?.ethereum;
+        }
+      },
+      {
+        id: 'tronlink',
+        name: 'TronLink',
+        sub: '波场助手 (专为 TRON 公链生态设计)',
+        families: ['TRON'],
+        icon: '🔴',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#FF0018" fill-opacity="0.2"/><path d="M10 11L26 14L19 27L10 11Z" stroke="#FF0018" stroke-width="2" fill="none"/><path d="M10 11L19 17L26 14" stroke="#FF0018" stroke-width="1.5"/><path d="M19 17V27" stroke="#FF0018" stroke-width="1.5"/></svg>`,
+        downloadUrl: 'https://www.tronlink.org/',
+        detect: () => !!(window.tronWeb || window.tronLink),
+        getProvider: () => window.tronWeb || window.tronLink
+      },
+      {
+        id: 'coinbase',
+        name: 'Coinbase Wallet',
+        sub: 'Coinbase 官方扩展 (支持 EVM)',
+        families: ['EVM'],
+        icon: '🛡️',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#0052FF"/><rect x="12" y="12" width="12" height="12" rx="3" fill="white"/></svg>`,
+        rdns: 'com.coinbase.wallet',
+        downloadUrl: 'https://www.coinbase.com/wallet',
+        detect: () => !!(window.coinbaseWalletExtension || window.ethereum?.isCoinbaseWallet || eip6963Providers.has('com.coinbase.wallet')),
+        getProvider: () => eip6963Providers.get('com.coinbase.wallet')?.provider || window.coinbaseWalletExtension || window.ethereum
+      },
+      {
+        id: 'rabby',
+        name: 'Rabby',
+        sub: '兔钱包 (DeBank 旗下 EVM 钱包)',
+        families: ['EVM'],
+        icon: '🐰',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#8799FD" fill-opacity="0.3"/><circle cx="18" cy="18" r="8" fill="#8799FD"/></svg>`,
+        rdns: 'io.rabby',
+        downloadUrl: 'https://rabby.io/',
+        detect: () => !!(window.rabby || window.ethereum?.isRabby || eip6963Providers.has('io.rabby')),
+        getProvider: () => eip6963Providers.get('io.rabby')?.provider || window.rabby || window.ethereum
+      },
+      {
+        id: 'bitget',
+        name: 'Bitget Wallet',
+        sub: '原 BitKeep (多链: EVM · TRON · Solana)',
+        families: ['EVM', 'SOLANA', 'TRON'],
+        icon: '💎',
+        svgIcon: `<svg class="w-8 h-8 rounded-xl shrink-0" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="9" fill="#00F0FF" fill-opacity="0.2"/><path d="M11 18L18 11L25 18L18 25L11 18Z" fill="#00F0FF"/></svg>`,
+        rdns: 'com.bitkeep.wallet',
+        downloadUrl: 'https://web3.bitget.com/',
+        detect: () => !!(window.bitkeep || eip6963Providers.has('com.bitkeep.wallet')),
+        getProvider: (family) => {
+          if (family === 'SOLANA') return window.bitkeep?.solana;
+          return eip6963Providers.get('com.bitkeep.wallet')?.provider || window.bitkeep?.ethereum || window.ethereum;
+        }
+      }
+    ];
+
+    // ==================== 智能环境检测 ====================
+    function detectRealEnvironment() {
+      const ua = (navigator.userAgent || '').toLowerCase();
+      const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+      const isWalletApp = ua.includes('metamask') || 
+                          ua.includes('okex') || 
+                          ua.includes('okx') || 
+                          ua.includes('phantom') || 
+                          ua.includes('trust') || 
+                          ua.includes('tokenpocket') || 
+                          ua.includes('imtoken') || 
+                          ua.includes('bitkeep') || 
+                          ua.includes('bitget') ||
+                          ua.includes('tronlink') ||
+                          (isMobile && (!!window.ethereum || !!window.solana || !!window.tronWeb));
+      return isWalletApp ? 'APP' : 'PC';
+    }
+
+    // 切换模拟环境
+    function switchEnvironment(env) {
+      detectedEnvironment = env;
+      const pcBtn = document.getElementById('env-btn-pc');
+      const appBtn = document.getElementById('env-btn-app');
+      const envLabel = document.getElementById('detected-env-label');
+
+      if (env === 'PC') {
+        pcBtn.className = 'px-2 py-0.5 rounded-lg bg-blue-950 text-cyan-300 border border-blue-800 font-medium';
+        appBtn.className = 'px-2 py-0.5 rounded-lg text-slate-400 hover:text-slate-200 font-medium';
+        envLabel.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 mr-1.5 animate-pulse"></span>🖥️ PC 桌面浏览器 (先选钱包，再选公链)';
+      } else {
+        appBtn.className = 'px-2 py-0.5 rounded-lg bg-blue-950 text-cyan-300 border border-blue-800 font-medium';
+        pcBtn.className = 'px-2 py-0.5 rounded-lg text-slate-400 hover:text-slate-200 font-medium';
+        envLabel.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mr-1.5 animate-pulse"></span>📱 钱包 App 内置环境 (直连 App 支持公链)';
+      }
+      log(`运行环境已切换为: ${env === 'PC' ? '🖥️ PC 浏览器模式' : '📱 钱包 App 内置浏览器模式'}`, 'info');
+    }
+
+    // ==================== 初始化与数据加载 ====================
+    window.addEventListener('DOMContentLoaded', async () => {
+      // 1. 自动检测环境
+      const initialEnv = detectRealEnvironment();
+      switchEnvironment(initialEnv);
+
+      // 2. 监听 EIP-6963 钱包自动发现
+      window.addEventListener('eip6963:announceProvider', (event) => {
+        const { info, provider } = event.detail;
+        eip6963Providers.set(info.rdns, { info, provider });
+        if (currentModalStep === 'WALLETS') {
+          renderModalWalletList();
+        }
+      });
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+      // 3. 从后端拉取最新支持的网络列表
+      await loadSupportedNetworks();
+
+      // 4. 检查已有登录凭证
+      if (currentSession.accessToken) {
+        await handleFetchProfile();
+      }
+    });
+
+    async function loadSupportedNetworks() {
+      try {
+        const res = await fetch('/api/networks');
+        if (res.ok) {
+          const data = await res.json();
+          supportedNetworks = data.map(d => {
+            const fallback = DEFAULT_NETWORKS.find(f => f.id === d.networkId) || {};
+            return {
+              id: d.networkId,
+              name: d.name,
+              family: d.family,
+              chainId: d.chainId,
+              chainIdHex: d.chainId ? '0x' + d.chainId.toString(16) : null,
+              symbol: d.nativeCurrency?.symbol || fallback.symbol || 'ETH',
+              icon: fallback.icon || (d.family === 'EVM' ? '🔷' : d.family === 'SOLANA' ? '🟣' : '🔴'),
+              rpc: d.httpRpc?.primaryUrl || fallback.rpc,
+              isPaused: d.security?.isPaused || false
+            };
+          }).filter(n => !n.isPaused);
+        }
+      } catch (e) {
+        console.warn('Load networks error, fallback to default:', e);
+      }
+
+      if (!supportedNetworks || supportedNetworks.length === 0) {
+        supportedNetworks = DEFAULT_NETWORKS;
+      }
+
+      if (currentModalStep === 'NETWORKS' && selectedWalletForModal) {
+        renderModalIntersectionNetworks(selectedWalletForModal);
+      }
+    }
+
+    // ==================== 弹窗交互控制 (先展示钱包列表 -> 选定后再展示公链交集) ====================
+    let currentModalStep = 'WALLETS'; // 'WALLETS' | 'NETWORKS'
+    let selectedWalletForModal = null;
+
+    function openConnectModal() {
+      clearAlert();
+      const modal = document.getElementById('connect-modal');
+      modal.classList.remove('hidden');
+
+      // 若在 App 内环境，若已识别为 TokenPocket App 则直接进入该钱包支持的链
+      if (detectedEnvironment === 'APP') {
+        const ua = navigator.userAgent.toLowerCase();
+        if (ua.includes('tokenpocket') || window.tokenpocket) {
+          const tp = KNOWN_WALLETS.find(w => w.id === 'tokenpocket');
+          selectWalletForModal(tp);
+          return;
+        }
+      }
+
+      // PC 浏览器模式：严格先展示钱包列表
+      showStepWallets();
+    }
+
+    function closeConnectModal() {
+      document.getElementById('connect-modal').classList.add('hidden');
+    }
+
+    function showStepWallets() {
+      currentModalStep = 'WALLETS';
+      selectedWalletForModal = null;
+
+      document.getElementById('modal-step-wallets').classList.remove('hidden');
+      document.getElementById('modal-step-networks').classList.add('hidden');
+
+      document.getElementById('modal-title').innerHTML = '<span>⚡ 步骤 1：选择 Web3 钱包 (Select Wallet)</span>';
+      document.getElementById('modal-subtitle').textContent = '已自动检测本机环境，优先排序列出已安装的钱包扩展：';
+
+      renderModalWalletList();
+    }
+
+    function backToWalletStep() {
+      showStepWallets();
+    }
+
+    function selectWalletForModal(wallet) {
+      const isDetected = wallet.detect ? wallet.detect() : false;
+      const hasProvider = isDetected || !!(wallet.getProvider && (wallet.getProvider('EVM') || wallet.getProvider('TRON') || wallet.getProvider('SOLANA')));
+
+      if (!hasProvider) {
+        const confirmDownload = confirm(`未在当前浏览器检测到 ${wallet.name} 扩展插件。\n\n如需安装该钱包，点击“确定”将前往官方下载页面：\n${wallet.downloadUrl || '官网'}\n\n若您确认已安装，点击“取消”仍可尝试进入公链选择。`);
+        if (confirmDownload) {
+          window.open(wallet.downloadUrl || 'https://www.google.com/search?q=' + encodeURIComponent(wallet.name + ' wallet extension'), '_blank');
+          return;
+        }
+      }
+
+      selectedWalletForModal = wallet;
+      currentModalStep = 'NETWORKS';
+
+      document.getElementById('modal-step-wallets').classList.add('hidden');
+      document.getElementById('modal-step-networks').classList.remove('hidden');
+
+      document.getElementById('modal-title').innerHTML = `<span>⚡ 步骤 2：选择连接公链 (Select Chain)</span>`;
+      document.getElementById('modal-subtitle').textContent = `已选定 ${wallet.name}，请选择目标公链进行原生签名登录：`;
+
+      renderModalIntersectionNetworks(wallet);
+    }
+
+    function renderModalWalletList() {
+      const container = document.getElementById('modal-wallet-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      // 汇总已知主流钱包与 EIP-6963 发现钱包
+      const allWallets = [...KNOWN_WALLETS];
+      eip6963Providers.forEach(({ info, provider }, rdns) => {
+        if (!allWallets.some(w => w.rdns === rdns)) {
+          allWallets.push({
+            id: rdns,
+            name: info.name,
+            sub: 'EIP-6963 自动感知扩展',
+            families: ['EVM'],
+            icon: '📱',
+            iconImg: info.icon,
+            rdns: rdns,
+            detect: () => true,
+            getProvider: () => provider
+          });
+        }
+      });
+
+      // 排序：已检测到的钱包排在最前面 (如用户本机安装的 TokenPocket)
+      const listWithStatus = allWallets.map(w => ({
+        wallet: w,
+        detected: w.detect ? w.detect() : false
+      })).sort((a, b) => {
+        if (a.detected && !b.detected) return -1;
+        if (!a.detected && b.detected) return 1;
+        return 0;
+      });
+
+      listWithStatus.forEach(({ wallet: w, detected }) => {
+        const card = document.createElement('div');
+        card.onclick = () => selectWalletForModal(w);
+
+        const baseClass = 'p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ';
+        const stateClass = detected 
+          ? 'bg-blue-950/40 border-cyan-500/70 hover:border-cyan-400 hover:bg-blue-950/70 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/40' 
+          : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60 opacity-80 hover:opacity-100';
+
+        card.className = baseClass + stateClass;
+
+        let iconHtml = w.svgIcon || `<span class="text-2xl">${w.icon}</span>`;
+        if (w.iconImg) {
+          iconHtml = `<img src="${w.iconImg}" class="w-8 h-8 rounded-lg object-contain" alt="${w.name}" />`;
+        }
+
+        const badgeHtml = detected
+          ? `<span class="inline-flex items-center text-[10px] font-semibold text-emerald-300 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-700/60 shadow-sm">
+               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+               🟢 已检测到
+             </span>`
+          : `<span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+               未检测到
+             </span>`;
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-3.5 overflow-hidden">
+            ${iconHtml}
+            <div class="overflow-hidden">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-white">${w.name}</span>
+                ${badgeHtml}
+              </div>
+              <div class="text-[11px] text-slate-400 truncate mt-0.5">${w.sub}</div>
+            </div>
+          </div>
+          <div class="text-slate-400 hover:text-cyan-400 pl-2 text-sm font-bold">
+            &rarr;
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderModalIntersectionNetworks(wallet) {
+      const banner = document.getElementById('selected-wallet-banner');
+      const countEl = document.getElementById('chains-intersection-count');
+      const descEl = document.getElementById('chains-intersection-desc');
+      const container = document.getElementById('modal-intersection-networks-list');
+
+      // 核心交集计算：【该钱包支持生态 ∩ 系统后台支持且未暂停的公链】
+      const intersection = supportedNetworks.filter(n => wallet.families.includes(n.family) && !n.isPaused);
+
+      let iconHtml = wallet.svgIcon || `<span class="text-2xl">${wallet.icon}</span>`;
+      if (wallet.iconImg) {
+        iconHtml = `<img src="${wallet.iconImg}" class="w-8 h-8 rounded-lg object-contain" alt="${wallet.name}" />`;
+      }
+
+      banner.innerHTML = `
+        <div class="flex items-center space-x-3">
+          ${iconHtml}
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-bold text-white">${wallet.name}</span>
+              <span class="text-[10px] text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800 font-mono">
+                支持: ${wallet.families.join(' · ')}
+              </span>
+            </div>
+            <div class="text-[11px] text-slate-400">${wallet.sub}</div>
+          </div>
+        </div>
+        <button onclick="backToWalletStep()" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+          更换钱包
+        </button>
+      `;
+
+      countEl.textContent = `交集公链: ${intersection.length} 条`;
+      descEl.innerHTML = `已过滤出【<strong>${wallet.name} 支持 ∩ 平台支持</strong>】的公链列表。点击目标链将直接唤起 <strong>${wallet.name}</strong> 授权签名：`;
+
+      container.innerHTML = '';
+
+      if (intersection.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full p-4 rounded-xl border border-slate-800 bg-slate-950/60 text-center text-xs text-slate-400">
+            该钱包支持的生态类型 (${wallet.families.join('/')}) 暂未在管理后台开启可用公链。
+          </div>
+        `;
+        return;
+      }
+
+      intersection.forEach(net => {
+        const card = document.createElement('div');
+        card.onclick = () => handleNetworkClickWithWallet(wallet, net);
+        card.className = 'p-3 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-cyan-400 hover:bg-slate-900 transition cursor-pointer flex items-center justify-between group';
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-2.5">
+            <span class="text-2xl">${net.icon}</span>
+            <div>
+              <div class="text-xs font-bold text-white group-hover:text-cyan-300 transition">${net.name}</div>
+              <div class="text-[10px] text-slate-400 font-mono">
+                ${net.family} ${net.chainId ? `· Chain ID: ${net.chainId}` : `· ${net.symbol}`}
+              </div>
+            </div>
+          </div>
+          <span class="text-xs text-cyan-400 font-semibold group-hover:translate-x-0.5 transition flex items-center space-x-1">
+            <span>调起签名</span>
+            <span>&rarr;</span>
+          </span>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function handleNetworkClickWithWallet(wallet, net) {
+      closeConnectModal();
+      log(`🚀 [直接唤起] 正在通过 ${wallet.name} 登录 ${net.name} (${net.family})...`, 'info');
+
+      try {
+        if (net.family === 'EVM') {
+          const provider = wallet.getProvider('EVM');
+          if (!provider) throw new Error(`未检测到 ${wallet.name} 的 EVM Provider！`);
+          await executeEvmAuth(provider, net);
+        } else if (net.family === 'SOLANA') {
+          const provider = wallet.getProvider('SOLANA');
+          if (!provider) throw new Error(`未检测到 ${wallet.name} 的 Solana Provider！`);
+          await executeSolanaAuth(provider, net);
+        } else if (net.family === 'TRON') {
+          const tronWeb = wallet.getProvider('TRON');
+          if (!tronWeb) throw new Error(`未检测到 ${wallet.name} 的 TRON Provider！`);
+          if (!tronWeb.defaultAddress?.base58) {
+            await new Promise(r => setTimeout(r, 200));
+            if (!tronWeb.defaultAddress?.base58 && window.tronLink?.request) {
+              try {
+                await window.tronLink.request({ method: 'tron_requestAccounts' });
+              } catch (e) {}
+            }
+          }
+          if (!tronWeb.defaultAddress?.base58) {
+            throw new Error(`请先解锁并在 ${wallet.name} 中切换/登录波场 TRON 账户！`);
+          }
+          await executeTronAuth(tronWeb, net);
+        }
+      } catch (err) {
+        log(`❌ 唤起授权失败: ${err.message}`, 'error');
+        showAlert(`${wallet.name} 授权失败`, err.message, 'error');
+      }
+    }
+
+    // ==================== 统一执行多链授权与签名 ====================
+    async function executeEvmAuth(provider, net) {
+      log('[EVM] 正在请求账户授权 (eth_requestAccounts)...', 'info');
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      const address = accounts[0];
+      document.getElementById('current-wallet-address').textContent = address;
+      document.getElementById('current-network-label').textContent = `${net.name} (Chain ID: ${net.chainId})`;
+
+      // 验证并切链
+      if (net.chainId) {
+        try {
+          const currentChainHex = await provider.request({ method: 'eth_chainId' });
+          if (parseInt(currentChainHex, 16) !== net.chainId) {
+            log(`[切链] 当前链 ID (${parseInt(currentChainHex, 16)}) 与目标 (${net.chainId}) 不符，申请切链...`, 'warn');
+            try {
+              await provider.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: net.chainIdHex }]
+              });
+              log(`✅ 已成功切链至: ${net.name}`, 'success');
+            } catch (switchErr) {
+              if (switchErr.code === 4902) {
+                await provider.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: net.chainIdHex,
+                    chainName: net.name,
+                    nativeCurrency: { name: net.symbol, symbol: net.symbol, decimals: 18 },
+                    rpcUrls: [net.rpc]
+                  }]
+                });
+              } else {
+                throw switchErr;
+              }
+            }
+          }
+        } catch (e) {
+          log(`切链提示: ${e.message}`, 'warn');
+        }
+      }
+
+      // 获取 Nonce
+      log(`[REQ] GET /api/auth/nonce?chain=EVM&address=${address}&networkId=${net.id}`, 'info');
+      const nonceRes = await fetch(`/api/auth/nonce?chain=EVM&address=${encodeURIComponent(address)}&networkId=${encodeURIComponent(net.id)}`);
+      const challenge = await nonceRes.json();
+      if (!nonceRes.ok) throw new Error(challenge.message || '获取 Nonce 失败');
+
+      // 签名
+      log('📝 正在唤起个人消息签名 (personal_sign)...', 'warn');
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [challenge.message, address]
+      });
+      log(`✅ 签名成功！`, 'success');
+
+      // 提交验签
+      await submitLoginToBackend('EVM', address, signature, challenge.message, net.id);
+    }
+
+    async function executeSolanaAuth(provider, net) {
+      log('[SOLANA] 正在连接账户...', 'info');
+      const resp = await provider.connect();
+      const address = (resp.publicKey || provider.publicKey).toString();
+      document.getElementById('current-wallet-address').textContent = address;
+      document.getElementById('current-network-label').textContent = `${net.name} (SOLANA)`;
+
+      log(`[REQ] GET /api/auth/nonce?chain=SOLANA&address=${address}`, 'info');
+      const nonceRes = await fetch(`/api/auth/nonce?chain=SOLANA&address=${encodeURIComponent(address)}`);
+      const challenge = await nonceRes.json();
+      if (!nonceRes.ok) throw new Error(challenge.message || '获取 Nonce 失败');
+
+      log('📝 正在唤起 Solana signMessage 签名...', 'warn');
+      const encoded = new TextEncoder().encode(challenge.message);
+      const signed = await provider.signMessage(encoded, 'utf8');
+      const rawSig = signed.signature || signed;
+      const signature = '0x' + Array.from(rawSig).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      await submitLoginToBackend('SOLANA', address, signature, challenge.message, 'solana');
+    }
+
+    async function executeTronAuth(tronWeb, net) {
+      const address = tronWeb.defaultAddress.base58;
+      document.getElementById('current-wallet-address').textContent = address;
+      document.getElementById('current-network-label').textContent = `${net.name} (TRON)`;
+
+      log(`[REQ] GET /api/auth/nonce?chain=TRON&address=${address}`, 'info');
+      const nonceRes = await fetch(`/api/auth/nonce?chain=TRON&address=${encodeURIComponent(address)}`);
+      const challenge = await nonceRes.json();
+      if (!nonceRes.ok) throw new Error(challenge.message || '获取 Nonce 失败');
+
+      log('📝 正在唤起波场 trx.sign 签名...', 'warn');
+      const signature = await tronWeb.trx.sign(tronWeb.toHex(challenge.message));
+
+      await submitLoginToBackend('TRON', address, signature, challenge.message, 'tron');
+    }
+
+    // ==================== 统一向后端提交验签 ====================
+    async function submitLoginToBackend(chain, address, signature, message, networkId) {
+      log(`[REQ] 提交签名给后端验证: POST /api/auth/login`, 'info', {
+        chain,
+        address,
+        networkId,
+        signature: signature.slice(0, 30) + '...'
+      });
+
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chain,
+          address,
+          signature,
+          message,
+          networkId
+        })
+      });
+
+      const loginData = await loginRes.json();
+      if (!loginRes.ok) throw new Error(loginData.message || '验签登录失败');
+
+      log('🎉 登录成功！已发放 JWT 双 Token，并成功解析主账号身份！', 'success', loginData);
+      updateSession(loginData);
+    }
+
+    // ==================== 多链钱包绑定逻辑 ====================
+    async function handleBindTargetWallet(targetChain) {
+      if (!currentSession.accessToken) {
+        alert('请先登录主账号！');
+        return;
+      }
+
+      try {
+        let address = '';
+        let signature = '';
+        let challengeMessage = '';
+
+        if (targetChain === 'EVM') {
+          const provider = window.tokenpocket?.ethereum || (window.ethereum?.isTokenPocket ? window.ethereum : null) || window.ethereum || window.okxwallet?.ethereum || (eip6963Providers.values().next().value?.provider);
+          if (!provider) throw new Error('未检测到 EVM 钱包插件');
+          const accounts = await provider.request({ method: 'eth_requestAccounts' });
+          address = accounts[0];
+
+          const nonceRes = await fetch(`/api/auth/nonce?chain=EVM&address=${encodeURIComponent(address)}`);
+          const challenge = await nonceRes.json();
+          challengeMessage = challenge.message;
+
+          log(`为当前主账号绑定新 EVM 地址，调起签名 (${address})...`, 'warn');
+          signature = await provider.request({
+            method: 'personal_sign',
+            params: [challengeMessage, address]
+          });
+        } else if (targetChain === 'SOLANA') {
+          const provider = window.tokenpocket?.solana || window.phantom?.solana || window.solana || window.okxwallet?.solana;
+          if (!provider) throw new Error('未检测到支持 Solana 的钱包插件 (TokenPocket / Phantom / OKX)！');
+          const resp = await provider.connect();
+          address = (resp.publicKey || provider.publicKey).toString();
+
+          const nonceRes = await fetch(`/api/auth/nonce?chain=SOLANA&address=${encodeURIComponent(address)}`);
+          const challenge = await nonceRes.json();
+          challengeMessage = challenge.message;
+
+          log(`为当前主账号绑定新地址，调起 Solana 签名 (${address})...`, 'warn');
+          const encoded = new TextEncoder().encode(challengeMessage);
+          const signed = await provider.signMessage(encoded, 'utf8');
+          const rawSig = signed.signature || signed;
+          signature = '0x' + Array.from(rawSig).map(b => b.toString(16).padStart(2, '0')).join('');
+        } else if (targetChain === 'TRON') {
+          const tronWeb = window.tokenpocket?.tronWeb || window.tronWeb || window.okxwallet?.tronWeb || window.tronLink;
+          if (!tronWeb || !tronWeb.defaultAddress?.base58) {
+            throw new Error('未检测到波场账户，请先解锁 TokenPocket 或 TronLink 中的 TRON 账户！');
+          }
+          address = tronWeb.defaultAddress.base58;
+
+          const nonceRes = await fetch(`/api/auth/nonce?chain=TRON&address=${encodeURIComponent(address)}`);
+          const challenge = await nonceRes.json();
+          challengeMessage = challenge.message;
+
+          log(`为当前主账号绑定新地址，调起 TronLink 签名 (${address})...`, 'warn');
+          signature = await tronWeb.trx.sign(tronWeb.toHex(challengeMessage));
+        }
+
+        log(`[REQ] 提交跨链绑定: POST /api/auth/bind-wallet (带 Bearer Token)`, 'info');
+        const bindRes = await fetch('/api/auth/bind-wallet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentSession.accessToken}`
+          },
+          body: JSON.stringify({
+            chain: targetChain,
+            address,
+            signature,
+            message: challengeMessage
+          })
+        });
+
+        const bindData = await bindRes.json();
+        if (!bindRes.ok) throw new Error(bindData.message || '绑定钱包失败');
+
+        log(`🎉 跨链地址绑定成功！已将 [${targetChain}] ${address} 成功绑定到当前同一个主账号！`, 'success', bindData);
+        currentSession.user = bindData;
+        renderProfile(bindData);
+      } catch (err) {
+        log(`❌ 绑定新钱包失败: ${err.message}`, 'error');
+        showAlert('绑定失败', err.message, 'error');
+      }
+    }
+
+    // ==================== 解绑钱包逻辑 ====================
+    async function handleUnbindWallet(chain, address) {
+      if (!confirm(`确定要解绑钱包 [${chain}] ${address} 吗？`)) return;
+      try {
+        log(`[REQ] 申请解绑: POST /api/auth/unbind-wallet`, 'warn');
+        const res = await fetch('/api/auth/unbind-wallet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentSession.accessToken}`
+          },
+          body: JSON.stringify({ chain, address })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '解绑失败');
+        log(`✅ 解绑成功！`, 'success', data);
+        currentSession.user = data;
+        renderProfile(data);
+      } catch (err) {
+        log(`❌ 解绑失败: ${err.message}`, 'error');
+      }
+    }
+
+    // ==================== 个人资料与状态更新 ====================
+    function updateSession(data) {
+      currentSession.accessToken = data.tokens.accessToken;
+      currentSession.refreshToken = data.tokens.refreshToken;
+      currentSession.user = data.user;
+
+      localStorage.setItem('w3_access_token', currentSession.accessToken);
+      localStorage.setItem('w3_refresh_token', currentSession.refreshToken);
+
+      // 更新顶部按钮
+      const headerAuth = document.getElementById('header-auth-container');
+      const shortAddr = data.user.primaryWallet.address.slice(0, 6) + '...' + data.user.primaryWallet.address.slice(-4);
+      headerAuth.innerHTML = `
+        <span class="text-xs px-3 py-1.5 rounded-xl bg-blue-950/80 border border-blue-700 text-cyan-300 font-mono font-medium flex items-center">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse"></span>
+          ${shortAddr}
+        </span>
+        <button onclick="handleDisconnect()" class="text-xs px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          退出
+        </button>
+      `;
+
+      document.getElementById('btn-main-connect-text').textContent = '已连接主账号 (重新选择)';
+      renderProfile(data.user);
+    }
+
+    function renderProfile(user) {
+      document.getElementById('card-bind').classList.remove('opacity-50', 'pointer-events-none');
+      document.getElementById('card-profile').classList.remove('hidden');
+
+      document.getElementById('user-id').textContent = user.id;
+      document.getElementById('user-role-badge').textContent = user.role;
+      document.getElementById('user-primary-wallet').textContent = `[${user.primaryWallet.chain}] ${user.primaryWallet.address}`;
+
+      const listContainer = document.getElementById('bound-wallets-list');
+      listContainer.innerHTML = '';
+
+      user.wallets.forEach(w => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between p-3 rounded-xl bg-slate-950/70 border border-slate-800';
+        item.innerHTML = `
+          <div class="flex items-center space-x-2.5 overflow-hidden">
+            <span class="px-2 py-0.5 rounded text-[11px] font-bold ${
+              w.chain === 'EVM' ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' :
+              w.chain === 'SOLANA' ? 'bg-purple-950 text-purple-300 border border-purple-800' :
+              'bg-red-950 text-red-300 border border-red-800'
+            }">${w.chain}</span>
+            <span class="font-mono text-xs text-slate-300 truncate">${w.address}</span>
+            ${w.isPrimary ? '<span class="text-[10px] text-amber-400 font-semibold px-1.5 py-0.5 bg-amber-950/50 rounded border border-amber-800">主钱包</span>' : ''}
+          </div>
+          ${!w.isPrimary && user.wallets.length > 1 ? `
+            <button onclick="handleUnbindWallet('${w.chain}', '${w.address}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-950/30 hover:bg-red-950 border border-red-900/50 transition">
+              解绑
+            </button>
+          ` : '<span class="text-[11px] text-slate-600">不可解绑</span>'}
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    async function handleFetchProfile() {
+      if (!currentSession.accessToken) return;
+      try {
+        log(`[REQ] 拉取当前登录用户画像: GET /api/auth/me`, 'info');
+        const res = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${currentSession.accessToken}` }
+        });
+        const user = await res.json();
+        if (!res.ok) throw new Error(user.message || 'Token 已过期');
+        log('✅ 个人信息拉取成功:', 'success', user);
+        currentSession.user = user;
+        renderProfile(user);
+      } catch (err) {
+        log(`❌ 校验登录状态失败: ${err.message}`, 'error');
+        handleDisconnect();
+      }
+    }
+
+    async function handleRefreshToken() {
+      if (!currentSession.refreshToken) {
+        alert('暂无 Refresh Token！');
+        return;
+      }
+      try {
+        log(`[REQ] 刷新 Token: POST /api/auth/refresh`, 'info');
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: currentSession.refreshToken })
+        });
+        const tokens = await res.json();
+        if (!res.ok) throw new Error(tokens.message || '刷新失败');
+        currentSession.accessToken = tokens.accessToken;
+        currentSession.refreshToken = tokens.refreshToken;
+        localStorage.setItem('w3_access_token', tokens.accessToken);
+        localStorage.setItem('w3_refresh_token', tokens.refreshToken);
+        log('✅ Token 刷新成功，新 Access Token 已生效！', 'success', tokens);
+      } catch (err) {
+        log(`❌ 刷新 Token 失败: ${err.message}`, 'error');
+      }
+    }
+
+    function copyAccessToken() {
+      if (!currentSession.accessToken) return;
+      navigator.clipboard.writeText(currentSession.accessToken);
+      log('📋 已复制 Access Token 到剪贴板', 'info');
+    }
+
+    async function handleDisconnect() {
+      clearAlert();
+      currentSession = { accessToken: null, refreshToken: null, user: null };
+      localStorage.removeItem('w3_access_token');
+      localStorage.removeItem('w3_refresh_token');
+      document.getElementById('card-bind').classList.add('opacity-50', 'pointer-events-none');
+      document.getElementById('card-profile').classList.add('hidden');
+      document.getElementById('current-wallet-address').textContent = '未连接';
+      document.getElementById('btn-main-connect-text').textContent = '连接钱包 (Connect Wallet)';
+      document.getElementById('header-auth-container').innerHTML = `
+        <button id="btn-header-connect" onclick="openConnectModal()" class="text-xs px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold shadow-lg shadow-cyan-500/20 transition flex items-center space-x-1.5">
+          <span>⚡</span><span>连接钱包 (Connect Wallet)</span>
+        </button>
+      `;
+      log('已断开连接并清除本地登录凭证。', 'warn');
+    }
+
+    // ==================== 辅助 UI 函数 ====================
+    function showAlert(title, message, type = 'error') {
+      const box = document.getElementById('login-alert-box');
+      const icon = document.getElementById('login-alert-icon');
+      const titleEl = document.getElementById('login-alert-title');
+      const descEl = document.getElementById('login-alert-desc');
+
+      if (!box) return;
+      box.classList.remove('hidden');
+      if (type === 'error') {
+        box.className = 'mt-4 p-3 rounded-xl border border-red-900/60 bg-red-950/40 text-red-300 text-xs flex items-start space-x-2.5';
+        icon.textContent = '❌';
+      } else {
+        box.className = 'mt-4 p-3 rounded-xl border border-blue-900/60 bg-blue-950/40 text-blue-300 text-xs flex items-start space-x-2.5';
+        icon.textContent = 'ℹ️';
+      }
+      titleEl.textContent = title;
+      descEl.textContent = message;
+    }
+
+    function clearAlert() {
+      const box = document.getElementById('login-alert-box');
+      if (box) box.classList.add('hidden');
+    }
+
+    function log(message, type = 'info', data = null) {
+      const logs = document.getElementById('console-logs');
+      if (logs.children.length === 1 && logs.children[0].classList.contains('italic')) {
+        logs.innerHTML = '';
+      }
+      const entry = document.createElement('div');
+      entry.className = 'p-2.5 rounded-lg border bg-slate-950/80 ' + 
+        (type === 'error' ? 'border-red-900/60 text-red-300' : 
+         type === 'success' ? 'border-emerald-900/60 text-emerald-300' : 
+         type === 'warn' ? 'border-amber-900/60 text-amber-300' : 'border-slate-800 text-slate-300');
+      
+      const time = new Date().toLocaleTimeString();
+      let html = `<div class="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+        <span>[${time}] ${type.toUpperCase()}</span>
+      </div><div>${message}</div>`;
+
+      if (data) {
+        html += `<pre class="mt-1.5 p-2 bg-slate-900 rounded border border-slate-800 text-[11px] overflow-x-auto text-cyan-300">${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}</pre>`;
+      }
+      entry.innerHTML = html;
+      logs.appendChild(entry);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('console-logs').innerHTML = '<div class="text-slate-500 italic">日志已清空</div>';
+    }
+  </script>
+</body>
+</html>
