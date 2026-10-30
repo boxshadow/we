@@ -241,6 +241,22 @@ export class AuthService {
   }
 
   /**
+   * 6. 演示体验账号免签名快捷登录 (Demo / Dev Preview)
+   */
+  async demoLogin(userId?: string): Promise<LoginResponse> {
+    const users: UserEntity[] = await this.userService.getAllUsers();
+    let target = userId ? users.find((u: UserEntity) => u.id === userId) : users.find((u: UserEntity) => u.nickname?.includes('Demo') || u.role === 'USER') || users[0];
+    if (!target) {
+      throw new NotFoundException('No demo user found in system');
+    }
+    const tokens = await this.generateTokens(target, target.primaryWallet.address, target.primaryWallet.chain);
+    return {
+      tokens,
+      user: target,
+    };
+  }
+
+  /**
    * 签发双 Token (Access Token 2小时, Refresh Token 7天)
    */
   private async generateTokens(

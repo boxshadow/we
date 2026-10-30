@@ -14,7 +14,10 @@ import {
   ExternalLink,
   AlertTriangle,
   Wallet as WalletIcon,
-  Globe2
+  Globe2,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight
 } from 'lucide-vue-next';
 import { useWalletStore } from '../stores/wallet';
 import type { WalletConfig, SupportedNetwork } from '../types/wallet';
@@ -39,6 +42,7 @@ const message = useMessage();
 const currentStep = ref<1 | 2>(1);
 const chosenWallet = ref<WalletConfig | null>(null);
 const signingChainId = ref<string | null>(null);
+const isDemoLoggingIn = ref(false);
 
 // 监听弹窗打开，重置步骤
 watch(() => props.show, (newVal) => {
@@ -73,7 +77,7 @@ function backToWallets() {
 async function handleConnectChain(network: SupportedNetwork) {
   if (!chosenWallet.value) return;
   if (network.isPaused) {
-    message.warning(`公链 [${network.name}] 当前处于平台熔断保护状态，暂停接入！`);
+    message.warning(`公链 [${network.name}] 当前处于平台熔断保护状态，暂停接入`);
     return;
   }
 
@@ -98,6 +102,21 @@ async function handleConnectChain(network: SupportedNetwork) {
     signingChainId.value = null;
   }
 }
+
+// 演示账号极速体验
+async function handleDemoLogin() {
+  isDemoLoggingIn.value = true;
+  try {
+    const res = await walletStore.loginWithDemoAccount();
+    message.success(`演示画像载入成功！欢迎用户 ${res.user.primaryWallet.address.slice(0, 6)}...${res.user.primaryWallet.address.slice(-4)}`);
+    emit('update:show', false);
+    emit('connected', res.user.primaryWallet.address);
+  } catch (err: any) {
+    message.error(err.message || '演示登录失败');
+  } finally {
+    isDemoLoggingIn.value = false;
+  }
+}
 </script>
 
 <template>
@@ -106,6 +125,8 @@ async function handleConnectChain(network: SupportedNetwork) {
     @update:show="(val) => emit('update:show', val)"
     preset="card"
     class="clean-connect-modal"
+    :animated="false"
+    :style="{ backgroundColor: '#0f172a', width: '600px' }"
     :mask-closable="!walletStore.isConnecting"
     :closable="!walletStore.isConnecting"
   >
@@ -141,7 +162,7 @@ async function handleConnectChain(network: SupportedNetwork) {
         <div class="step-guide">
           <WalletIcon :size="15" class="guide-icon" />
           <span>
-            {{ props.mode === 'bind' ? '请选择您要绑定至当前主账号的钱包扩展或 App 环境' : '系统优先检测当前设备安装的钱包插件与 App 运行环境' }}
+            {{ props.mode === 'bind' ? '请选择您要绑定至当前主账号的钱包扩展或 App 环境' : '系统已通过 EIP-6963 自动感知当前浏览器安装的钱包扩展' }}
           </span>
         </div>
 
@@ -159,23 +180,19 @@ async function handleConnectChain(network: SupportedNetwork) {
                 <img :src="item.wallet.iconImg" alt="" />
               </span>
               <span v-else-if="item.wallet.svgIcon" v-html="item.wallet.svgIcon" class="wallet-svg-box"></span>
-              <span v-else class="wallet-emoji-box">{{ item.wallet.icon }}</span>
+              <span v-else class="wallet-fallback-box">
+                <WalletIcon :size="20" />
+              </span>
             </div>
 
             <!-- 钱包信息 -->
             <div class="wallet-info">
               <div class="wallet-title-row">
                 <span class="wallet-name">{{ item.wallet.name }}</span>
-                <NTag
-                  v-if="item.detected"
-                  type="success"
-                  size="small"
-                  round
-                  class="status-tag"
-                >
-                  <template #icon><CheckCircle2 :size="11" /></template>
+                <span v-if="item.detected" class="detected-badge">
+                  <span class="detected-dot"></span>
                   已就绪
-                </NTag>
+                </span>
                 <a
                   v-else-if="item.wallet.downloadUrl"
                   :href="item.wallet.downloadUrl"
@@ -201,6 +218,30 @@ async function handleConnectChain(network: SupportedNetwork) {
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- 演示画像快速体验通道 (在无插件环境提供一键演练) -->
+        <div v-if="props.mode !== 'bind'" class="demo-experience-dock">
+          <div class="demo-dock-info">
+            <div class="demo-dock-title">
+              <Sparkles :size="14" class="sparkle-icon" />
+              <span>无钱包扩展？体验演示画像</span>
+            </div>
+            <p class="demo-dock-desc">
+              一键接入预置多链测试画像 (EVM / TRON / Solana)，直接探索资产聚合看板与全生命周期充提流控。
+            </p>
+          </div>
+          <NButton
+            size="small"
+            type="primary"
+            secondary
+            :loading="isDemoLoggingIn"
+            @click="handleDemoLogin"
+            class="demo-dock-btn"
+          >
+            载入画像
+            <template #icon><ArrowRight :size="12" /></template>
+          </NButton>
         </div>
       </div>
 
@@ -238,63 +279,87 @@ async function handleConnectChain(network: SupportedNetwork) {
               'is-paused': net.isPaused,
               'is-signing': signingChainId === net.networkId
             }"
-            @click="!net.isPaused && !walletStore.isConnecting && handleConnectChain(net)"
+            @click="!net.isPaused && !signingChainId && handleConnectChain(net)"
           >
-            <div class="net-left">
-              <div class="net-avatar" :class="net.family.toLowerCase()">
-                {{ net.icon || (net.family === 'EVM' ? 'ETH' : net.family === 'SOLANA' ? 'SOL' : 'TRX') }}
+            <div class="network-info">
+              <div class="network-top">
+                <span class="net-family-tag" :class="net.family.toLowerCase()">{{ net.family }}</span>
+                <span class="network-name">{{ net.name }}</span>
+                <span v-if="net.chainId" class="chain-id-text">ID: {{ net.chainId }}</span>
               </div>
-              <div class="net-info">
-                <div class="net-name-row">
-                  <span class="net-name">{{ net.name }}</span>
-                  <span class="net-family-badge">{{ net.family }}</span>
-                  <span v-if="net.chainId" class="net-id-badge">ID: {{ net.chainId }}</span>
-                </div>
-                <div class="net-sub">
-                  币种: <span class="net-symbol mono-text">{{ net.symbol }}</span> · RPC: {{ net.rpc }}
-                </div>
+              <div class="network-sub">
+                <span class="token-symbol">原生币: {{ net.symbol }}</span>
+                <span class="network-rpc" :title="net.rpc">
+                  {{ net.rpc ? net.rpc.replace('https://', '') : '官方直连' }}
+                </span>
               </div>
             </div>
 
-            <div class="net-right">
-              <NTag v-if="net.isPaused" type="warning" size="small" round>
-                <template #icon><AlertTriangle :size="11" /></template>
-                熔断维护
-              </NTag>
-              <div v-else-if="signingChainId === net.networkId" class="signing-indicator">
+            <div class="network-action">
+              <span v-if="net.isPaused" class="paused-badge">
+                <AlertTriangle :size="12" /> 维护熔断
+              </span>
+              <div v-else-if="signingChainId === net.networkId" class="signing-badge">
                 <NSpin size="small" />
-                <span>等待签名</span>
+                <span>等待钱包签名...</span>
               </div>
               <NButton
                 v-else
-                type="primary"
                 size="small"
+                type="primary"
                 secondary
-                class="connect-act-btn"
+                class="connect-chain-btn"
                 :disabled="walletStore.isConnecting"
               >
-                {{ props.mode === 'bind' ? '签名绑定' : '连接' }}
+                {{ props.mode === 'bind' ? '签名绑定' : '连接登录' }}
               </NButton>
             </div>
           </div>
-
-          <NAlert v-if="compatibleNetworks.length === 0" type="warning" class="empty-chains-alert">
-            当前后台没有为该钱包开启任何支持的公链节点。请联系管理员在后台开启对应网络。
-          </NAlert>
         </div>
       </div>
     </div>
   </NModal>
 </template>
 
-<style scoped>
-:deep(.clean-connect-modal) {
-  max-width: 500px;
-  width: 92vw;
+<style>
+.n-modal-mask {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  transition: none !important;
+}
+
+.n-modal {
+  transition: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.clean-connect-modal.n-modal,
+.clean-connect-modal.n-card {
+  --n-color-modal: #0f172a !important;
+  --n-color: #0f172a !important;
+  background-color: #0f172a !important;
   background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9) !important;
+  opacity: 1 !important;
+}
+
+.clean-connect-modal .n-card__content,
+.clean-connect-modal .n-card-header {
+  background-color: #0f172a !important;
+  background: #0f172a !important;
+}
+</style>
+
+<style scoped>
+.clean-connect-modal {
+  width: 580px;
+  max-width: calc(100vw - 32px);
+  background-color: #0f172a;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
   border-radius: 14px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
 }
 
 .modal-header {
@@ -304,22 +369,23 @@ async function handleConnectChain(network: SupportedNetwork) {
 }
 
 .back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #94a3b8;
-  padding: 4px 8px;
   border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
-.back-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+.back-btn:hover {
   color: #f8fafc;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .header-titles {
@@ -330,97 +396,101 @@ async function handleConnectChain(network: SupportedNetwork) {
 
 .step-badge {
   font-size: 11px;
-  color: #3b82f6;
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .modal-title {
-  font-size: 16px;
+  margin: 0;
+  font-size: 17px;
   font-weight: 600;
   color: #f8fafc;
-  margin: 0;
 }
 
 .modal-body-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .step-guide {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 14px;
+  background: rgba(30, 41, 59, 0.5);
   border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 12px;
   color: #94a3b8;
 }
 
 .guide-icon {
-  color: #64748b;
-  flex-shrink: 0;
+  color: #3b82f6;
+  shrink: 0;
 }
 
-/* 钱包列表 */
 .wallet-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 380px;
-  overflow-y: auto;
-  padding-right: 2px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 540px) {
+  .wallet-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .wallet-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 14px;
-  background: #0b1120;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px;
   border-radius: 10px;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
-  transition: all 0.15s;
-  user-select: none;
+  transition: all 0.15s ease;
 }
 
 .wallet-card:hover {
-  background: #111827;
-  border-color: rgba(255, 255, 255, 0.16);
+  background: #162032;
+  border-color: rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
 }
 
 .wallet-card.is-detected {
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(17, 24, 39, 0.95);
+}
+
+.wallet-card.is-detected:hover {
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .wallet-icon-wrapper {
   width: 36px;
   height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: #1e293b;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
-.wallet-icon-wrapper img {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
+.wallet-custom-img img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
 }
 
-.wallet-svg-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wallet-emoji-box {
-  font-size: 20px;
+.wallet-fallback-box {
+  color: #94a3b8;
 }
 
 .wallet-info {
@@ -432,103 +502,167 @@ async function handleConnectChain(network: SupportedNetwork) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   margin-bottom: 2px;
 }
 
 .wallet-name {
-  font-weight: 600;
   font-size: 14px;
+  font-weight: 600;
   color: #f8fafc;
 }
 
-.wallet-desc {
+.detected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  color: #64748b;
-  margin: 0 0 4px 0;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.detected-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
 }
 
 .download-link {
-  display: flex;
-  align-items: center;
-  gap: 3px;
   font-size: 11px;
   color: #64748b;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .download-link:hover {
   color: #3b82f6;
 }
 
+.wallet-desc {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .family-tags {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
 .chain-fam-pill {
-  font-size: 9px;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
+  font-size: 10px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: #1e293b;
   color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .chain-fam-pill.evm {
   color: #60a5fa;
   background: rgba(59, 130, 246, 0.1);
-}
-
-.chain-fam-pill.solana {
-  color: #c084fc;
-  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
 }
 
 .chain-fam-pill.tron {
   color: #f87171;
   background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
-/* 步骤 2 头部横幅 */
+.chain-fam-pill.solana {
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.demo-experience-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px dashed rgba(59, 130, 246, 0.25);
+  margin-top: 4px;
+}
+
+.demo-dock-info {
+  flex: 1;
+}
+
+.demo-dock-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #60a5fa;
+  margin-bottom: 2px;
+}
+
+.sparkle-icon {
+  color: #3b82f6;
+}
+
+.demo-dock-desc {
+  margin: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.demo-dock-btn {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .wallet-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  background: #111827;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
 }
 
 .banner-left {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .banner-label {
-  font-size: 10px;
+  font-size: 11px;
   color: #64748b;
 }
 
 .banner-name {
   font-size: 14px;
   color: #f8fafc;
-  font-weight: 600;
 }
 
 .banner-families {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
-/* 网络列表 */
 .network-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 340px;
+  max-height: 320px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -537,118 +671,110 @@ async function handleConnectChain(network: SupportedNetwork) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: #0b1120;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #111827;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
-.network-card:hover:not(.is-paused) {
-  background: #111827;
-  border-color: rgba(255, 255, 255, 0.18);
+.network-card:hover {
+  background: #162032;
+  border-color: rgba(59, 130, 246, 0.35);
 }
 
 .network-card.is-paused {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
+  background: rgba(17, 24, 39, 0.5);
 }
 
-.network-card.is-signing {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.net-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.net-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.05);
-  color: #cbd5e1;
-}
-
-.net-info {
+.network-info {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+  gap: 4px;
 }
 
-.net-name-row {
+.network-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.net-name {
+.net-family-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.net-family-tag.evm {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.net-family-tag.tron {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.net-family-tag.solana {
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.network-name {
+  font-size: 14px;
   font-weight: 600;
-  font-size: 13px;
   color: #f8fafc;
 }
 
-.net-family-badge {
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
-}
-
-.net-id-badge {
-  font-size: 10px;
+.chain-id-text {
+  font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
   color: #64748b;
 }
 
-.net-sub {
+.network-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 11px;
   color: #64748b;
-  white-space: nowrap;
+}
+
+.token-symbol {
+  font-family: 'JetBrains Mono', monospace;
+  color: #94a3b8;
+}
+
+.network-rpc {
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  white-space: nowrap;
 }
 
-.net-symbol {
-  color: #94a3b8;
-  font-weight: 500;
+.paused-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #f59e0b;
 }
 
-.signing-indicator {
+.signing-badge {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   color: #3b82f6;
-  font-weight: 500;
 }
 
-.connect-act-btn {
+.connect-chain-btn {
   font-size: 12px;
-}
-
-@media (max-width: 640px) {
-  :deep(.clean-connect-modal) {
-    width: 94vw;
-  }
-  .net-sub {
-    max-width: 140px;
-  }
 }
 </style>

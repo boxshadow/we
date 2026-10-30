@@ -160,4 +160,17 @@ export class AuthController {
   async refreshToken(@Body() dto: RefreshTokenDto): Promise<AuthTokens> {
     return this.authService.refreshTokens(dto.refreshToken);
   }
+
+  /**
+   * 7. 演示账号快速登录 (用于无钱包环境快速演练与评估)
+   */
+  @ApiOperation({
+    summary: '演示账号快速免签名登录',
+    description: '返回演示账号的用户档案与真实有效 JWT 令牌，供开发体验与评审使用。',
+  })
+  @ApiResponse({ status: 200, description: '成功获取演示令牌' })
+  @Post('demo-login')
+  async demoLogin(@Body('userId') userId?: string): Promise<LoginResponse> {
+    return this.authService.demoLogin(userId);
+  }
 }

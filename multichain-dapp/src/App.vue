@@ -6,6 +6,7 @@ import {
   NDialogProvider,
   NNotificationProvider,
   NButton,
+  NTooltip,
   darkTheme
 } from 'naive-ui';
 import {
@@ -13,7 +14,9 @@ import {
   ExternalLink,
   Layers,
   ChevronDown,
-  Terminal
+  LogOut,
+  ShieldCheck,
+  Activity
 } from 'lucide-vue-next';
 import { cleanDarkThemeOverrides } from './styles/theme';
 import { useWalletStore } from './stores/wallet';
@@ -24,6 +27,12 @@ const showConnectModal = ref(false);
 
 onMounted(() => {
   walletStore.init();
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('connect') === '1') {
+      showConnectModal.value = true;
+    }
+  }
 });
 
 const formatAddr = (addr: string) => {
@@ -49,7 +58,7 @@ const formatAddr = (addr: string) => {
                   </div>
                   <div class="brand-text">
                     <span class="brand-name">CyberGate</span>
-                    <span class="brand-sub">Multi-Chain</span>
+                    <span class="brand-sub">Portal</span>
                   </div>
                 </div>
 
@@ -62,16 +71,27 @@ const formatAddr = (addr: string) => {
                   </a>
 
                   <!-- 网络与连接状态 -->
-                  <div
-                    v-if="walletStore.accessToken"
-                    class="addr-badge"
-                    @click="showConnectModal = true"
-                    title="点击管理多链钱包与切换网络"
-                  >
-                    <span class="dot-online"></span>
-                    <span class="addr-chain">{{ walletStore.activeNetwork?.name || '已连接' }}</span>
-                    <span class="addr-text">{{ formatAddr(walletStore.connectedAddress) }}</span>
-                    <ChevronDown :size="14" class="addr-arrow" />
+                  <div v-if="walletStore.accessToken && walletStore.user" class="session-actions">
+                    <div
+                      class="addr-badge"
+                      @click="showConnectModal = true"
+                      title="点击管理多链钱包与切换网络"
+                    >
+                      <span class="dot-online"></span>
+                      <span class="addr-chain">{{ walletStore.user.primaryWallet.chain }}</span>
+                      <span class="addr-text mono-text">{{ formatAddr(walletStore.connectedAddress) }}</span>
+                      <span class="wallets-count-tag">{{ walletStore.user.wallets?.length || 1 }} 链已绑</span>
+                      <ChevronDown :size="13" class="addr-arrow" />
+                    </div>
+
+                    <NTooltip trigger="hover">
+                      <template #trigger>
+                        <button class="logout-btn" @click="walletStore.disconnect" aria-label="断开会话">
+                          <LogOut :size="14" />
+                        </button>
+                      </template>
+                      断开当前连接
+                    </NTooltip>
                   </div>
 
                   <NButton
@@ -102,7 +122,7 @@ const formatAddr = (addr: string) => {
                 <div class="footer-right">
                   <span class="status-indicator">
                     <span class="status-dot"></span>
-                    多链节点运行就绪
+                    多链 RPC 与 KMS Enclave 运行就绪
                   </span>
                 </div>
               </div>
@@ -134,9 +154,36 @@ html, body {
   box-sizing: border-box;
 }
 
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
 /* 统一代码与地址等宽字体 */
 .mono-text {
   font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 </style>
 
@@ -199,15 +246,23 @@ html, body {
 }
 
 .brand-sub {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .nav-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .nav-link {
@@ -254,21 +309,51 @@ html, body {
 }
 
 .addr-chain {
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 500;
-  text-transform: uppercase;
+  font-size: 10px;
+  color: #60a5fa;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: rgba(59, 130, 246, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .addr-text {
   font-size: 13px;
-  font-family: 'JetBrains Mono', monospace;
   color: #f1f5f9;
   font-weight: 500;
 }
 
+.wallets-count-tag {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #1e293b;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .addr-arrow {
   color: #64748b;
+}
+
+.logout-btn {
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.logout-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .nav-connect-btn {
@@ -280,7 +365,7 @@ html, body {
   max-width: 1140px;
   width: 100%;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 28px 24px 64px;
 }
 
 .app-footer {
@@ -321,7 +406,7 @@ html, body {
     padding: 12px 16px;
   }
   .app-main {
-    padding: 20px 16px 48px;
+    padding: 16px 16px 48px;
   }
   .brand-sub {
     display: none;

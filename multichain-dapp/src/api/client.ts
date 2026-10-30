@@ -15,7 +15,7 @@ export const apiClient = {
       chainId: d.chainId,
       chainIdHex: d.chainId ? '0x' + d.chainId.toString(16) : null,
       symbol: d.nativeCurrency?.symbol || 'ETH',
-      icon: d.family === 'EVM' ? '🔷' : d.family === 'SOLANA' ? '🟣' : '🔴',
+      icon: d.family,
       rpc: d.httpRpc?.primaryUrl || '',
       isPaused: d.security?.isPaused || false
     }));
@@ -40,6 +40,18 @@ export const apiClient = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || '验签登录失败');
+    return data;
+  },
+
+  // 演示账号免签名快捷登录 (Demo / Dev Preview)
+  async demoLogin(userId?: string): Promise<{ tokens: AuthTokens; user: UserProfile }> {
+    const res = await fetch(`${API_BASE}/auth/demo-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || '演示登录失败');
     return data;
   },
 

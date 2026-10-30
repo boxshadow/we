@@ -28,6 +28,8 @@ export const cleanDarkThemeOverrides: GlobalThemeOverrides = {
     fontFamilyMono: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace"
   },
   Card: {
+    color: '#0f172a',
+    colorModal: '#0f172a',
     borderColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: '12px',
     colorEmbedded: '#0b1120',

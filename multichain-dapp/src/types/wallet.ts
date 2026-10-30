@@ -17,7 +17,7 @@ export interface WalletConfig {
   name: string;
   sub: string;
   families: ChainFamily[];
-  icon: string;
+  icon?: string;
   svgIcon?: string;
   iconImg?: string;
   rdns?: string;
@@ -29,18 +29,23 @@ export interface WalletConfig {
 export interface UserWallet {
   chain: ChainFamily;
   address: string;
+  networkId?: string;
   isPrimary: boolean;
-  boundAt: string;
+  boundAt: number | string;
 }
 
 export interface UserProfile {
   id: string;
+  nickname?: string;
+  role: string;
+  status?: string;
   primaryWallet: {
     chain: ChainFamily;
     address: string;
   };
-  role: string;
   wallets: UserWallet[];
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface AuthTokens {
@@ -51,4 +56,59 @@ export interface AuthTokens {
 export interface AuthSession {
   tokens: AuthTokens | null;
   user: UserProfile | null;
+}
+
+export interface TokenBalance {
+  networkId: string;
+  networkName?: string;
+  family: ChainFamily;
+  tokenSymbol: string;
+  tokenName: string;
+  balance: string;
+  lockedBalance?: string;
+  usdPrice?: number;
+  usdValue?: string;
+  isNative: boolean;
+}
+
+export interface DepositOrder {
+  orderId: string;
+  network: string;
+  tokenSymbol?: string;
+  depositAddress: string;
+  amount: string;
+  expiresAt: number;
+  rawTx?: any;
+}
+
+export interface DepositProgress {
+  status: 'PENDING' | 'DETECTED' | 'CONFIRMING' | 'CREDITED' | 'EXPIRED' | 'FAILED';
+  progress: number;
+  currentConfirmations: number;
+  requiredConfirmations: number;
+  blockNumber?: number;
+  currentBlock?: number;
+  txHash?: string;
+  credited?: boolean;
+  amount?: string;
+  tokenSymbol?: string;
+}
+
+export interface WithdrawalStepItem {
+  name: string;
+  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+  detail?: string;
+}
+
+export interface WithdrawalRecord {
+  id: string;
+  network: string;
+  tokenSymbol: string;
+  amount: string;
+  toAddress: string;
+  fromVault?: string;
+  status: 'PROCESSING' | 'CONFIRMING' | 'SUCCESS' | 'COMPENSATED_FAILED' | 'FAILED';
+  txHash?: string;
+  createdAt: number;
+  errorMessage?: string;
 }

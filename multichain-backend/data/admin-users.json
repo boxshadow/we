@@ -8,8 +8,8 @@
     "isTwoFactorEnabled": true,
     "role": "SUPER_ADMIN",
     "status": "ACTIVE",
-    "createdAt": 1793381359405,
-    "updatedAt": 1793381359405
+    "createdAt": 1793383989826,
+    "updatedAt": 1793383989826
   },
   {
     "id": "adm-founder-0000-4000-8000-000000000001",
@@ -20,7 +20,7 @@
     "isTwoFactorEnabled": false,
     "role": "FOUNDER",
     "status": "ACTIVE",
-    "createdAt": 1793381359387,
-    "updatedAt": 1793381359387
+    "createdAt": 1793383989808,
+    "updatedAt": 1793383989808
   }
 ]
