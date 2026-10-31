@@ -667,9 +667,30 @@ watch(
       await loadUserBalances();
       await loadUserWithdrawals();
       await loadDbUsers();
+      if (!currentDepositOrder.value) {
+        await handleCreateDeposit();
+      }
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => activeTab.value,
+  async (tab) => {
+    if (tab === 'deposit' && !currentDepositOrder.value && walletStore.user?.id) {
+      await handleCreateDeposit();
+    }
+  }
+);
+
+watch(
+  () => depositTab.value,
+  async (tab) => {
+    if (tab === 'manual' && !currentDepositOrder.value && walletStore.user?.id) {
+      await handleCreateDeposit();
+    }
+  }
 );
 
 onMounted(async () => {
@@ -885,7 +906,7 @@ onMounted(async () => {
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'deposit' }"
-          @click="activeTab = 'deposit'"
+          @click="switchToDeposit()"
         >
           <ArrowDownLeft :size="15" />
           <span>极速充值</span>
@@ -1101,32 +1122,94 @@ onMounted(async () => {
 
             <!-- 模式 B: 专属收款池地址与二维码 -->
             <div v-else class="manual-deposit-dock">
-              <div class="qr-container-box">
-                <NQrCode
-                  v-if="currentDepositOrder?.depositAddress"
-                  :value="currentDepositOrder.depositAddress"
-                  :size="150"
-                  class="styled-qr"
-                />
-                <div class="qr-details">
-                  <div class="qr-label">专属入金只收不发收款池地址:</div>
-                  <div class="qr-address-copy-row">
-                    <span class="deposit-address-text mono-text">
-                      {{ currentDepositOrder?.depositAddress || '正在生成收款地址...' }}
-                    </span>
+              <div v-if="isCreatingDeposit && !currentDepositOrder" class="qr-loading-stage">
+                <NSpin size="medium" />
+                <span class="qr-loading-text">正在从专属收款池匹配地址并构建数据...</span>
+              </div>
+
+              <div v-else-if="currentDepositOrder" class="qr-showcase-panel">
+                <!-- 顶部信息栏 -->
+                <div class="qr-panel-top">
+                  <div class="qr-net-tag-group">
+                    <span class="chain-tag" :class="depositNetwork.toLowerCase()">{{ depositNetwork.toUpperCase() }}</span>
+                    <span class="qr-token-name">{{ currentDepositOrder.tokenSymbol || selectedTokenSymbol }}</span>
+                  </div>
+                  <div class="qr-timer-pill">
+                    <Clock :size="12" />
+                    <span>30 分钟有效</span>
+                  </div>
+                </div>
+
+                <!-- 二维码主体区域：带精密四角刻线、平滑微圆角、中心 Token 徽章 -->
+                <div class="qr-display-stage">
+                  <div class="qr-frame-box">
+                    <!-- 4 个精密对齐刻线 -->
+                    <span class="frame-corner corner-tl"></span>
+                    <span class="frame-corner corner-tr"></span>
+                    <span class="frame-corner corner-bl"></span>
+                    <span class="frame-corner corner-br"></span>
+
+                    <div class="qr-canvas-holder">
+                      <NQrCode
+                        :value="currentDepositOrder.depositAddress"
+                        :size="160"
+                        :padding="0"
+                        error-correction-level="H"
+                        color="#090d16"
+                        background-color="#ffffff"
+                      />
+                      <!-- 中心 Token 徽标，高反差微阴影 -->
+                      <div class="qr-center-pill">
+                        <span class="qr-center-text">{{ (currentDepositOrder.tokenSymbol || selectedTokenSymbol).slice(0, 4) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 扫码引导提示 -->
+                <div class="qr-scan-guide">
+                  <ScanQrCode :size="14" class="guide-icon" />
+                  <span>使用 <strong>TokenPocket / MetaMask / OKX</strong> 移动端 App 扫码转账</span>
+                </div>
+
+                <!-- 专属收款地址复制行 -->
+                <div class="qr-address-card">
+                  <div class="qr-addr-header">
+                    <span class="qr-addr-title">充值专属收款地址 (只收不发 · 独立金库)</span>
+                    <a
+                      :href="getExplorerTxUrl(depositNetwork, currentDepositOrder.depositAddress)"
+                      target="_blank"
+                      class="explorer-addr-link"
+                    >
+                      <span>浏览器查验</span>
+                      <ExternalLink :size="11" />
+                    </a>
+                  </div>
+                  <div class="qr-addr-body">
+                    <span class="mono-text qr-full-address">{{ currentDepositOrder.depositAddress }}</span>
                     <button
                       class="copy-btn-solid"
-                      @click="copyToClipboard(currentDepositOrder?.depositAddress || '')"
+                      @click="copyToClipboard(currentDepositOrder.depositAddress)"
+                      title="复制完整收款地址"
                     >
-                      <Check v-if="copiedAddress === currentDepositOrder?.depositAddress" :size="13" />
+                      <Check v-if="copiedAddress === currentDepositOrder.depositAddress" :size="13" />
                       <Copy v-else :size="13" />
                     </button>
                   </div>
-                  <div class="pool-warning-notice">
-                    <AlertCircle :size="13" />
-                    <span>该收款池物理只收不发，请勿向此地址转入其他公链资产。</span>
-                  </div>
                 </div>
+
+                <!-- 充值防跨错网络安全预警 -->
+                <div class="qr-security-warning">
+                  <ShieldAlert :size="14" class="warning-icon" />
+                  <span class="warning-text">
+                    请务必确认充值转账网络为 <strong>{{ depositNetwork.toUpperCase() }}</strong>，且仅支持充值 <strong>{{ currentDepositOrder.tokenSymbol || selectedTokenSymbol }}</strong>。请勿充入其他币种或错误网络。
+                  </span>
+                </div>
+              </div>
+
+              <div v-else class="qr-loading-stage">
+                <span class="qr-loading-text">暂无有效收款池地址，请选择币种后重新生成</span>
+                <NButton size="small" type="primary" secondary @click="handleCreateDeposit">重新生成地址</NButton>
               </div>
 
               <div class="manual-verify-box">
@@ -2296,40 +2379,261 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.qr-container-box {
+/* 精致专属收款池与二维码呈现面板 */
+.qr-loading-stage {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
   align-items: center;
-  padding: 14px;
-  background: #111827;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  background: #090d16;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   margin-bottom: 16px;
 }
 
-.qr-details {
-  flex: 1;
-  min-width: 0;
+.qr-loading-text {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.qr-showcase-panel {
+  background: #090d16;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.qr-label {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.qr-address-copy-row {
+.qr-panel-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
 }
 
-.deposit-address-text {
-  font-size: 12px;
+.qr-net-tag-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-token-name {
+  font-size: 13px;
+  font-weight: 600;
   color: #f8fafc;
+}
+
+.qr-timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.qr-display-stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.qr-frame-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  line-height: 0;
+}
+
+/* 四角高精对齐刻度 */
+.frame-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: rgba(59, 130, 246, 0.7);
+  pointer-events: none;
+}
+
+.corner-tl {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-top-left-radius: 6px;
+}
+
+.corner-tr {
+  top: 0;
+  right: 0;
+  border-top: 2px solid;
+  border-right: 2px solid;
+  border-top-right-radius: 6px;
+}
+
+.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid;
+  border-left: 2px solid;
+  border-bottom-left-radius: 6px;
+}
+
+.corner-br {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+  border-bottom-right-radius: 6px;
+}
+
+.qr-canvas-holder {
+  position: relative;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  line-height: 0;
+}
+
+/* 消除 Naive UI 二维码在全局 box-sizing 下的偏移与截断 */
+:deep(.n-qr-code) {
+  box-sizing: content-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
+}
+
+:deep(.n-qr-code canvas) {
+  display: block !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.qr-center-pill {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border: 2px solid #090d16;
+  border-radius: 6px;
+  padding: 2px 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  line-height: 1;
+}
+
+.qr-center-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #090d16;
+  letter-spacing: 0.5px;
+}
+
+.qr-scan-guide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.guide-icon {
+  color: #3b82f6;
+}
+
+.qr-address-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.qr-addr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qr-addr-title {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.explorer-addr-link {
+  font-size: 11px;
+  color: #3b82f6;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.explorer-addr-link:hover {
+  text-decoration: underline;
+}
+
+.qr-addr-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.qr-full-address {
+  font-size: 12px;
+  color: #f1f5f9;
   word-break: break-all;
+}
+
+.qr-security-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #f59e0b;
+}
+
+.warning-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.warning-text {
+  flex: 1;
 }
 
 .copy-btn-solid {
@@ -2346,14 +2650,6 @@ onMounted(async () => {
 
 .copy-btn-solid:hover {
   color: #3b82f6;
-}
-
-.pool-warning-notice {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #f59e0b;
 }
 
 .manual-verify-box {
@@ -3002,6 +3298,22 @@ onMounted(async () => {
   }
   .account-id-mobile {
     display: inline-block;
+  }
+  .qr-showcase-panel {
+    padding: 12px 10px;
+  }
+  .qr-frame-box {
+    padding: 8px;
+  }
+  .qr-canvas-holder {
+    padding: 10px;
+  }
+  .qr-scan-guide {
+    font-size: 11px;
+    text-align: center;
+  }
+  .qr-full-address {
+    font-size: 11px;
   }
 }
 </style>
