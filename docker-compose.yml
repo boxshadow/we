@@ -50,6 +50,7 @@ services:
     volumes:
       - ./multichain-backend/data:/app/data
       - ./multichain-backend/prisma:/app/prisma
+      - ./multichain-backend/public:/app/public
     depends_on:
       kms-vault:
         condition: service_healthy

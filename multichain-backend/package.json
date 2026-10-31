@@ -23,6 +23,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "admin:dev": "pnpm --filter multichain-admin dev",
     "admin:build": "pnpm --filter multichain-admin build",
+    "dapp:build": "cd ../multichain-dapp && pnpm build && cp -r dist/* ../multichain-backend/public/",
     "migrate": "node scripts/migrate.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",

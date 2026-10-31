@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "build:sync": "vue-tsc --noEmit && vite build && cp -r dist/* ../multichain-backend/public/",
     "preview": "vite preview"
   },
   "dependencies": {
