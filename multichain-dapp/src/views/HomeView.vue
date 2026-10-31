@@ -237,6 +237,12 @@ function formatAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function formatShortId(id: string) {
+  if (!id) return '';
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
+
 async function loadSupportedTokens(netId: string) {
   try {
     const list = await apiClient.getSupportedTokens(netId);
@@ -806,12 +812,21 @@ onMounted(async () => {
         <div class="account-meta-left">
           <div class="account-id-row">
             <span class="account-badge">主账号 ID</span>
-            <span class="account-id-text mono-text">{{ walletStore.user.id }}</span>
+            <span class="account-id-text account-id-desktop mono-text">{{ walletStore.user.id }}</span>
+            <span class="account-id-text account-id-mobile mono-text">{{ formatShortId(walletStore.user.id) }}</span>
             <span class="role-pill">{{ walletStore.user.role }}</span>
+            <button
+              class="copy-inline-btn"
+              @click="copyToClipboard(walletStore.user.id)"
+              title="复制主账号 ID"
+            >
+              <Check v-if="copiedAddress === walletStore.user.id" :size="12" />
+              <Copy v-else :size="12" />
+            </button>
           </div>
           <div class="genesis-wallet-row">
             <Lock :size="13" class="lock-icon" />
-            <span class="genesis-label">创世主钱包 (锁定保护):</span>
+            <span class="genesis-label">创世钱包:</span>
             <span class="genesis-chain">{{ walletStore.user.primaryWallet.chain }}</span>
             <span class="genesis-addr mono-text">{{ formatAddr(walletStore.user.primaryWallet.address) }}</span>
             <button
@@ -826,19 +841,21 @@ onMounted(async () => {
         </div>
 
         <div class="account-metrics-right">
-          <div class="metric-block">
-            <span class="metric-label">聚合资产总估值 (USD)</span>
-            <div class="metric-val-row">
-              <span class="metric-dollar">$</span>
-              <span class="metric-number mono-text tabular-nums">{{ totalEstimatedUsd }}</span>
+          <div class="metrics-summary-group">
+            <div class="metric-block">
+              <span class="metric-label">聚合资产总估值 (USD)</span>
+              <div class="metric-val-row">
+                <span class="metric-dollar">$</span>
+                <span class="metric-number mono-text tabular-nums">{{ totalEstimatedUsd }}</span>
+              </div>
             </div>
-          </div>
 
-          <div class="metric-divider"></div>
+            <div class="metric-divider"></div>
 
-          <div class="metric-block">
-            <span class="metric-label">已绑定公链矩阵</span>
-            <span class="metric-sub-val mono-text">{{ walletStore.user.wallets?.length || 1 }} 条公链</span>
+            <div class="metric-block">
+              <span class="metric-label">已绑定公链矩阵</span>
+              <span class="metric-sub-val mono-text">{{ walletStore.user.wallets?.length || 1 }} 条公链</span>
+            </div>
           </div>
 
           <div class="header-fast-actions">
@@ -1816,18 +1833,24 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .account-badge {
   font-size: 11px;
   color: #64748b;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .account-id-text {
   font-size: 13px;
   color: #f8fafc;
   font-weight: 600;
+}
+
+.account-id-mobile {
+  display: none;
 }
 
 .role-pill {
@@ -1837,6 +1860,7 @@ onMounted(async () => {
   background: rgba(59, 130, 246, 0.15);
   color: #60a5fa;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .genesis-wallet-row {
@@ -1845,15 +1869,22 @@ onMounted(async () => {
   gap: 6px;
   font-size: 12px;
   color: #94a3b8;
+  flex-wrap: wrap;
 }
 
 .lock-icon {
   color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.genesis-label {
+  flex-shrink: 0;
 }
 
 .genesis-chain {
   color: #60a5fa;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .genesis-addr {
@@ -1870,6 +1901,7 @@ onMounted(async () => {
   align-items: center;
   border-radius: 4px;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .copy-inline-btn:hover {
@@ -1878,6 +1910,12 @@ onMounted(async () => {
 }
 
 .account-metrics-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.metrics-summary-group {
   display: flex;
   align-items: center;
   gap: 24px;
@@ -1936,6 +1974,14 @@ onMounted(async () => {
   gap: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   padding-bottom: 12px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.dapp-nav-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-btn {
@@ -1950,6 +1996,8 @@ onMounted(async () => {
   color: #94a3b8;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -2004,12 +2052,16 @@ onMounted(async () => {
 /* 数据表格 */
 .table-container {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
 }
 
 .dapp-table {
   width: 100%;
+  min-width: 600px;
   border-collapse: collapse;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .dapp-table th {
@@ -2875,5 +2927,81 @@ onMounted(async () => {
   color: #475569;
   text-align: center;
   padding: 12px;
+}
+
+/* 移动端与小屏幕自适应 (Responsive Design) */
+@media (max-width: 768px) {
+  .account-overview-banner {
+    padding: 16px 14px;
+    gap: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .account-metrics-right {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+  }
+  .metrics-summary-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    width: 100%;
+  }
+  .metric-divider {
+    display: none;
+  }
+  .header-fast-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .header-fast-actions .n-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-card {
+    padding: 20px 16px;
+    gap: 20px;
+  }
+  .hero-title {
+    font-size: 20px;
+    line-height: 1.35;
+    margin: 8px 0 6px;
+    word-break: break-word;
+  }
+  .hero-description {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .hero-action-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .primary-cta-btn,
+  .demo-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .dapp-nav-tabs {
+    padding-bottom: 8px;
+    gap: 6px;
+  }
+  .tab-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    gap: 5px;
+  }
+  .account-id-desktop {
+    display: none;
+  }
+  .account-id-mobile {
+    display: inline-block;
+  }
 }
 </style>

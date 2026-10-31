@@ -40,6 +40,12 @@ const formatAddr = (addr: string) => {
   if (addr.length <= 12) return addr;
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 };
+
+const formatShortAddr = (addr: string) => {
+  if (!addr) return '';
+  if (addr.length <= 10) return addr;
+  return `${addr.slice(0, 4)}...${addr.slice(-3)}`;
+};
 </script>
 
 <template>
@@ -65,9 +71,9 @@ const formatAddr = (addr: string) => {
                 <!-- 导航操作项 -->
                 <div class="nav-actions">
                   <!-- 后台管理快捷跳转 -->
-                  <a href="/admin" target="_blank" class="nav-link">
-                    <span>管理中台</span>
-                    <ExternalLink :size="13" />
+                  <a href="/admin" target="_blank" class="nav-link" title="管理中台" aria-label="管理中台">
+                    <span class="nav-link-text">管理中台</span>
+                    <ExternalLink :size="13" class="nav-link-icon" />
                   </a>
 
                   <!-- 网络与连接状态 -->
@@ -79,14 +85,15 @@ const formatAddr = (addr: string) => {
                     >
                       <span class="dot-online"></span>
                       <span class="addr-chain">{{ walletStore.user.primaryWallet.chain }}</span>
-                      <span class="addr-text mono-text">{{ formatAddr(walletStore.connectedAddress) }}</span>
+                      <span class="addr-text addr-text-full mono-text">{{ formatAddr(walletStore.connectedAddress) }}</span>
+                      <span class="addr-text addr-text-short mono-text">{{ formatShortAddr(walletStore.connectedAddress) }}</span>
                       <span class="wallets-count-tag">{{ walletStore.user.wallets?.length || 1 }} 链已绑</span>
-                      <ChevronDown :size="13" class="addr-arrow" />
+                      <ChevronDown :size="12" class="addr-arrow" />
                     </div>
 
                     <NTooltip trigger="hover">
                       <template #trigger>
-                        <button class="logout-btn" @click="walletStore.disconnect" aria-label="断开会话">
+                        <button class="logout-btn" @click="walletStore.disconnect" aria-label="断开会话" title="断开连接">
                           <LogOut :size="14" />
                         </button>
                       </template>
@@ -102,7 +109,7 @@ const formatAddr = (addr: string) => {
                     @click="showConnectModal = true"
                   >
                     <template #icon><Wallet :size="15" /></template>
-                    连接钱包
+                    <span class="connect-btn-text">连接钱包</span>
                   </NButton>
                 </div>
               </div>
@@ -218,6 +225,7 @@ html, body {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .logo-box {
@@ -230,12 +238,14 @@ html, body {
   align-items: center;
   justify-content: center;
   color: #3b82f6;
+  flex-shrink: 0;
 }
 
 .brand-text {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .brand-name {
@@ -257,12 +267,14 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .session-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .nav-link {
@@ -276,6 +288,8 @@ html, body {
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-link:hover {
@@ -294,6 +308,8 @@ html, body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .addr-badge:hover {
@@ -306,6 +322,7 @@ html, body {
   height: 7px;
   border-radius: 50%;
   background: #10b981;
+  flex-shrink: 0;
 }
 
 .addr-chain {
@@ -316,6 +333,7 @@ html, body {
   background: rgba(59, 130, 246, 0.15);
   padding: 1px 5px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .addr-text {
@@ -324,16 +342,22 @@ html, body {
   font-weight: 500;
 }
 
+.addr-text-short {
+  display: none;
+}
+
 .wallets-count-tag {
   font-size: 11px;
   color: #94a3b8;
   background: #1e293b;
   padding: 1px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .addr-arrow {
   color: #64748b;
+  flex-shrink: 0;
 }
 
 .logout-btn {
@@ -348,6 +372,7 @@ html, body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .logout-btn:hover {
@@ -358,6 +383,8 @@ html, body {
 
 .nav-connect-btn {
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .app-main {
@@ -403,13 +430,103 @@ html, body {
 
 @media (max-width: 640px) {
   .nav-container {
-    padding: 12px 16px;
+    padding: 10px 14px;
+    gap: 8px;
   }
   .app-main {
-    padding: 16px 16px 48px;
+    padding: 14px 12px 48px;
+  }
+  .brand {
+    gap: 8px;
+  }
+  .logo-box {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+  }
+  .brand-name {
+    font-size: 15px;
   }
   .brand-sub {
     display: none;
+  }
+  .nav-actions {
+    gap: 6px;
+  }
+  .session-actions {
+    gap: 6px;
+  }
+  .nav-link {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 8px;
+  }
+  .nav-link-text {
+    display: none;
+  }
+  .addr-badge {
+    padding: 4px 8px;
+    gap: 5px;
+    border-radius: 8px;
+  }
+  .addr-chain {
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .addr-text {
+    font-size: 12px;
+  }
+  .addr-text-full {
+    display: none;
+  }
+  .addr-text-short {
+    display: inline-block;
+  }
+  .wallets-count-tag {
+    display: none;
+  }
+  .addr-arrow {
+    display: none;
+  }
+  .logout-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .nav-connect-btn {
+    height: 32px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+  .app-footer {
+    padding: 16px 14px;
+  }
+  .footer-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .nav-container {
+    padding: 8px 10px;
+  }
+  .brand-name {
+    font-size: 14px;
+  }
+  .addr-badge {
+    padding: 3px 6px;
+    gap: 4px;
+  }
+  .addr-text {
+    font-size: 11px;
+  }
+  .connect-btn-text {
+    font-size: 12px;
   }
 }
 </style>
