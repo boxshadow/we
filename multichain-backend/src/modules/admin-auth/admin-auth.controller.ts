@@ -7,6 +7,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -63,20 +64,26 @@ export class AdminAuthController {
 
   @ApiOperation({
     summary: '重置管理员为未绑定 2FA 状态 (开发演示与测试首次登录流程用)',
-    description: '将指定管理员 (默认 admin) 重置为未绑定 2FA 状态，方便随时测试首次登录扫码绑定全流程。',
+    description: '将指定管理员 (默认 admin) 重置为未绑定 2FA 状态，方便随时测试首次登录扫码绑定全流程。仅在开发/测试环境下开放。',
   })
   @HttpCode(HttpStatus.OK)
   @Post('2fa/reset-demo')
   async resetDemo(@Body('username') username?: string) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('生产环境已关闭 2FA 演示重置接口');
+    }
     return this.adminAuthService.resetTwoFactorToUnbound(username || 'admin');
   }
 
   @ApiOperation({
     summary: '获取指定密钥的实时 TOTP (演示辅助)',
-    description: '用于在开发环境下快速获取当前扫码生成的临时密钥的实时 6 位验证码。',
+    description: '用于在开发环境下快速获取当前扫码生成的临时密钥的实时 6 位验证码。仅在开发/测试环境下开放。',
   })
   @Get('2fa/live-code')
   getLiveCode(@Req() req: Request) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('生产环境已关闭实时 TOTP 查询接口');
+    }
     const secret = req.query.secret as string;
     if (!secret) {
       return { code: this.adminAuthService.getCurrentDefaultTotp() };

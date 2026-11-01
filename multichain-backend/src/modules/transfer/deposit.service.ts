@@ -113,7 +113,7 @@ export class DepositService implements OnModuleInit {
     }
 
     const amountBn = new BigNumber(dto.amount);
-    if (amountBn.isNaN() || amountBn.isLessThanOrEqualTo(0)) {
+    if (amountBn.isNaN() || !amountBn.isFinite() || amountBn.isLessThanOrEqualTo(0)) {
       throw new BadRequestException(`充值金额不合法: ${dto.amount}`);
     }
 

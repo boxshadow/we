@@ -184,6 +184,11 @@ html, body {
   background: #334155;
 }
 
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: #f8fafc;
+}
+
 /* 统一代码与地址等宽字体 */
 .mono-text {
   font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;

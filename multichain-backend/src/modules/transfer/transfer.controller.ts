@@ -1,11 +1,25 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  Optional,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import { TransferService } from './transfer.service.js';
 import { DepositService } from './deposit.service.js';
 import { WithdrawService } from './withdraw.service.js';
@@ -18,6 +32,7 @@ import {
   CreateWithdrawDto,
 } from './types/order.types.js';
 import { WithdrawalReconciliationService } from './withdrawal-reconciliation.service.js';
+import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard.js';
 
 @ApiTags('Transfer - 充提与转账业务')
 @Controller('transfer')
@@ -27,6 +42,7 @@ export class TransferController {
     private readonly depositService: DepositService,
     private readonly withdrawService: WithdrawService,
     private readonly reconciliationService: WithdrawalReconciliationService,
+    @Optional() private readonly jwtService?: JwtService,
   ) {}
 
   @ApiOperation({
@@ -138,7 +154,23 @@ export class TransferController {
   })
   @ApiResponse({ status: 200, description: '出款成功，返回提现订单记录与 txHash' })
   @Post('workflow/withdraw')
-  async processWithdrawal(@Body() dto: CreateWithdrawDto) {
+  async processWithdrawal(@Body() dto: CreateWithdrawDto, @Req() req: Request) {
+    // 若请求头携带 JWT 认证凭据，严格校验当前会话身份，防止冒领他人在途资产
+    const authHeader = req?.headers?.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ') && this.jwtService) {
+      try {
+        const token = authHeader.split(' ')[1]?.trim();
+        const payload: any = await this.jwtService.verifyAsync(token);
+        if (payload?.sub) {
+          if (dto.userId && dto.userId !== payload.sub) {
+            throw new ForbiddenException('越权访问：无权使用他人主账号发起提现');
+          }
+          dto.userId = payload.sub;
+        }
+      } catch (err: any) {
+        if (err instanceof ForbiddenException) throw err;
+      }
+    }
     return this.withdrawService.processWithdrawal(dto);
   }
 
@@ -165,6 +197,8 @@ export class TransferController {
   @ApiOperation({
     summary: '管理后台查询全平台提现订单流水 (Admin Withdrawals Ledger)',
   })
+  @ApiBearerAuth('JWT-Admin-Auth')
+  @UseGuards(AdminJwtAuthGuard)
   @Get('workflow/withdrawals')
   async getAllWithdrawals() {
     return this.withdrawService.getAllWithdrawals();
@@ -182,6 +216,8 @@ export class TransferController {
   @ApiOperation({
     summary: '手动立即触发在途订单对账巡检 (Trigger Manual Reconciliation)',
   })
+  @ApiBearerAuth('JWT-Admin-Auth')
+  @UseGuards(AdminJwtAuthGuard)
   @Post('workflow/reconciliation/run')
   async triggerReconciliation() {
     return this.reconciliationService.reconcileInFlightOrders();

@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { BalanceService } from './balance.service.js';
+import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard.js';
 
 @ApiTags('Balances - 多链代币资产余额中心')
 @Controller('balances')
@@ -34,8 +35,10 @@ export class BalanceController {
   }
 
   @ApiOperation({
-    summary: '【管理后台】查询全网所有用户代币资产余额一览',
+    summary: '【管理后台】查询全网所有用户代币资产余额一览 (Admin Only)',
   })
+  @ApiBearerAuth('JWT-Admin-Auth')
+  @UseGuards(AdminJwtAuthGuard)
   @Get('admin/all')
   async getAllBalances() {
     return this.balanceService.getAllBalances();

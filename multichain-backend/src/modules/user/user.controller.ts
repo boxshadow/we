@@ -1,9 +1,12 @@
-import { Controller, Get, Post } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, UseGuards, ForbiddenException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service.js';
 import type { UserEntity } from './entities/user.entity.js';
+import { AdminJwtAuthGuard } from '../admin-auth/guards/admin-jwt-auth.guard.js';
 
-@ApiTags('Users - 用户画像与多链绑定数据库')
+@ApiTags('Users - 用户画像与多链绑定数据库 (Admin Only)')
+@ApiBearerAuth('JWT-Admin-Auth')
+@UseGuards(AdminJwtAuthGuard)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -29,10 +32,13 @@ export class UserController {
 
   @ApiOperation({
     summary: '清空/重置数据库 (Reset Database)',
-    description: '清空当前所有注册用户与绑定记录，并将 data/users.json 归零。',
+    description: '清空当前所有注册用户与绑定记录，并将 data/users.json 归零。仅在非生产环境且管理员鉴权下可用。',
   })
   @Post('reset')
   async reset(): Promise<UserEntity[]> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('生产环境严禁执行数据库清空重置操作');
+    }
     return this.userService.resetDatabase();
   }
 }

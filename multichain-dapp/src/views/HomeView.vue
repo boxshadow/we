@@ -74,8 +74,6 @@ const copiedAddress = ref<string | null>(null);
 
 // 开发者底层画像抽屉
 const isDevPanelOpen = ref(false);
-const dbUsers = ref<UserProfile[]>([]);
-const isDbLoading = ref(false);
 
 // 用户资产矩阵体系
 const userBalances = ref<any[]>([]);
@@ -284,16 +282,55 @@ async function loadUserWithdrawals() {
   }
 }
 
-async function loadDbUsers() {
-  isDbLoading.value = true;
+const recentDeposits = ref<any[]>([]);
+
+async function loadRecentDeposits() {
   try {
-    dbUsers.value = await apiClient.getAllUsers();
-  } catch (e) {
-    console.warn('拉取用户列表失败:', e);
-  } finally {
-    isDbLoading.value = false;
+    const list = await apiClient.getRecentDeposits();
+    if (walletStore.user?.id) {
+      recentDeposits.value = list.filter((d: any) => !d.userId || d.userId === walletStore.user?.id);
+    } else {
+      recentDeposits.value = list;
+    }
+  } catch (err: any) {
+    console.warn('拉取充值流水失败:', err);
   }
 }
+
+async function loadActivityHistory() {
+  await Promise.allSettled([loadUserWithdrawals(), loadRecentDeposits()]);
+}
+
+const unifiedActivityList = computed(() => {
+  const items: any[] = [];
+  for (const w of userWithdrawals.value) {
+    items.push({
+      id: w.id,
+      type: 'WITHDRAW',
+      typeLabel: '提现出金',
+      network: w.network || w.chain,
+      tokenSymbol: w.tokenSymbol,
+      amount: w.amount,
+      txHash: w.txHash,
+      status: w.status || 'CONFIRMED',
+      timestamp: w.createdAt || Date.now(),
+    });
+  }
+  for (const d of recentDeposits.value) {
+    items.push({
+      id: d.id,
+      type: 'DEPOSIT',
+      typeLabel: '充值入金',
+      network: d.network || d.chain,
+      tokenSymbol: d.tokenSymbol || 'USDT',
+      amount: d.actualAmount || d.amount,
+      txHash: d.txHash,
+      status: d.status || 'CONFIRMED',
+      timestamp: d.createdAt || Date.now(),
+    });
+  }
+  return items.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+});
 
 function openLoginModal() {
   connectModalMode.value = 'login';
@@ -336,11 +373,16 @@ function fillCurrentAddress() {
 
 async function handleCreateDeposit() {
   if (!walletStore.user?.id) return;
+  const amt = parseFloat(depositAmount.value);
+  if (isNaN(amt) || amt <= 0) {
+    message.error('请输入有效的充值金额');
+    return;
+  }
   isCreatingDeposit.value = true;
   try {
     const res = await apiClient.createDepositIntent({
       network: depositNetwork.value,
-      amount: depositAmount.value || '10.0',
+      amount: depositAmount.value.trim(),
       tokenSymbol: selectedTokenSymbol.value,
       userId: walletStore.user.id,
     });
@@ -464,7 +506,7 @@ async function handleWalletSignDeposit() {
             depositPollingTimer = null;
             message.success(`区块确认完毕，充值成功到账: ${prog.amount || orderRes.amount} ${prog.tokenSymbol || selectedTokenSymbol.value}`);
             await loadUserBalances();
-            await loadDbUsers();
+            await loadActivityHistory();
           }
         }
       } catch (e) {
@@ -507,7 +549,7 @@ async function handleConfirmWithTxHash() {
     };
     message.success('链上对账核验成功！充值金额已累加至账户余额');
     loadUserBalances();
-    loadDbUsers();
+    loadActivityHistory();
   } catch (err: any) {
     message.error(err.message || '核验确认失败');
   } finally {
@@ -538,7 +580,7 @@ async function handleScanMatchWithoutTxHash() {
     };
     message.success('智能对账探测成功！已匹配入账');
     loadUserBalances();
-    loadDbUsers();
+    loadActivityHistory();
   } catch (err: any) {
     message.error(err.message || '未扫描到匹配交易，请稍后重试');
   } finally {
@@ -566,6 +608,10 @@ async function executeServerSideWithdrawal() {
   }
   if (!withdrawToAddress.value.trim()) {
     message.error('请输入提现目标目的地址');
+    return;
+  }
+  if (isWithdrawAddressValid.value === false) {
+    message.error(`提现接收地址不符合 ${withdrawNetwork.value.toUpperCase()} 规范，请仔细核对`);
     return;
   }
 
@@ -654,7 +700,7 @@ async function handleUnbind(chain: ChainFamily, address: string) {
     message.loading(`正在解绑 [${chain}] ${formatAddr(address)}...`);
     await walletStore.unbindWallet(chain, address);
     message.success('已成功移除该公链绑定');
-    await loadDbUsers();
+    await loadActivityHistory();
   } catch (err: any) {
     message.error(err.message || '解绑失败');
   }
@@ -665,8 +711,7 @@ watch(
   async (newVal) => {
     if (newVal && walletStore.user) {
       await loadUserBalances();
-      await loadUserWithdrawals();
-      await loadDbUsers();
+      await loadActivityHistory();
       if (!currentDepositOrder.value) {
         await handleCreateDeposit();
       }
@@ -706,7 +751,7 @@ onMounted(async () => {
     withdrawNetwork.value = walletStore.supportedNetworks[0].networkId;
     await loadSupportedTokens(depositNetwork.value);
   }
-  await loadDbUsers();
+  await loadActivityHistory();
 });
 </script>
 
@@ -1558,7 +1603,7 @@ onMounted(async () => {
               <h3 class="panel-title">全链路链上出入金流水与审计</h3>
               <p class="panel-subtitle">每一笔充值与提现均具备不可篡改的链上 Hash 与区块高度记录</p>
             </div>
-            <NButton size="small" secondary @click="loadUserWithdrawals">
+            <NButton size="small" secondary @click="loadActivityHistory">
               <template #icon><RefreshCw :size="13" /></template>
               刷新流水
             </NButton>
@@ -1578,32 +1623,37 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="userWithdrawals.length === 0">
+                <tr v-if="unifiedActivityList.length === 0">
                   <td colspan="7" class="text-center empty-cell">
-                    暂无链上出入金流水记录
+                    <div class="empty-state-box">
+                      <History :size="24" class="empty-state-icon" />
+                      <div class="empty-state-title">暂无链上出入金流水记录</div>
+                      <div class="empty-state-hint">发起充值或提现后，每一笔带区块证明的流水都会展示在此</div>
+                    </div>
                   </td>
                 </tr>
-                <tr v-for="rec in userWithdrawals" :key="rec.id">
+                <tr v-for="rec in unifiedActivityList" :key="rec.id">
                   <td class="mono-text text-muted">
-                    {{ new Date(rec.createdAt || Date.now()).toLocaleTimeString() }}
+                    {{ new Date(rec.timestamp || Date.now()).toLocaleTimeString() }}
                   </td>
                   <td>
-                    <span class="type-pill withdraw">提现出金</span>
+                    <span class="type-pill" :class="rec.type.toLowerCase()">{{ rec.typeLabel }}</span>
                   </td>
                   <td>
                     <span class="network-badge">{{ rec.network }}</span>
                   </td>
                   <td class="mono-text font-medium">{{ rec.tokenSymbol }}</td>
-                  <td class="text-right mono-text font-medium text-highlight">
-                    -{{ rec.amount }}
+                  <td class="text-right mono-text font-medium" :class="rec.type === 'DEPOSIT' ? 'text-emerald' : 'text-highlight'">
+                    {{ rec.type === 'DEPOSIT' ? '+' : '-' }}{{ rec.amount }}
                   </td>
                   <td>
-                    <div class="tx-hash-cell">
+                    <div class="tx-hash-cell" v-if="rec.txHash">
                       <span class="mono-text">{{ formatAddr(rec.txHash) }}</span>
                       <a :href="getExplorerTxUrl(rec.network, rec.txHash)" target="_blank" class="explorer-link">
                         <ExternalLink :size="12" />
                       </a>
                     </div>
+                    <span v-else class="text-muted mono-text">-</span>
                   </td>
                   <td class="text-right">
                     <span class="status-indicator-badge success">
@@ -3137,13 +3187,50 @@ onMounted(async () => {
 /* 审计历史 */
 .type-pill {
   font-size: 11px;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
+  font-weight: 500;
+  display: inline-block;
 }
 
 .type-pill.withdraw {
   color: #f87171;
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.type-pill.deposit {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.text-emerald {
+  color: #34d399;
+}
+
+.empty-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  gap: 8px;
+}
+
+.empty-state-icon {
+  color: #475569;
+}
+
+.empty-state-title {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.empty-state-hint {
+  font-size: 11px;
+  color: #64748b;
 }
 
 .tx-hash-cell {

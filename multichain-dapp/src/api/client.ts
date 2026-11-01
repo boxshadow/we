@@ -173,10 +173,15 @@ export const apiClient = {
   },
 
   // 发起提现出金 (服务端执行线上转账出资)
-  async withdraw(payload: { network: string; tokenSymbol: string; amount: string; toAddress: string; userId?: string; tokenAddress?: string }): Promise<any> {
+  async withdraw(payload: { network: string; tokenSymbol: string; amount: string; toAddress: string; userId?: string; tokenAddress?: string }, token?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const auth = token || (typeof localStorage !== 'undefined' ? localStorage.getItem('dapp_access_token') : null);
+    if (auth) {
+      headers['Authorization'] = `Bearer ${auth}`;
+    }
     const res = await fetch(`${API_BASE}/transfer/workflow/withdraw`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     const data = await res.json();

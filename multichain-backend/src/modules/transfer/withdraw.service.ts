@@ -15,6 +15,7 @@ import { NetworkRegistryService } from '../network/network-registry.service.js';
 import { TokenConfigService } from '../token/token-config.service.js';
 import { BalanceService } from '../balance/balance.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AddressValidatorUtil } from '../../common/utils/address-validator.util.js';
 import {
   CreateWithdrawalDto,
   OrderStatus,
@@ -142,7 +143,7 @@ export class WithdrawService implements OnModuleInit {
       }
 
       const amountBn = new BigNumber(dto.amount);
-      if (amountBn.isNaN() || amountBn.isLessThanOrEqualTo(0)) {
+      if (amountBn.isNaN() || !amountBn.isFinite() || amountBn.isLessThanOrEqualTo(0)) {
         throw new BadRequestException(`提现金额不合法: ${dto.amount}`);
       }
 
@@ -150,6 +151,14 @@ export class WithdrawService implements OnModuleInit {
         throw new BadRequestException(`提现接收地址无效: ${dto.toAddress}`);
       }
       const cleanToAddress = dto.toAddress.trim();
+
+      // 严格公链格式校验 (EVM / TRON / SOLANA)
+      const addrCheck = AddressValidatorUtil.validate(net.family, cleanToAddress);
+      if (!addrCheck.isValid) {
+        throw new BadRequestException(
+          `提现接收地址格式不符合 [${net.family}] 规范: ${addrCheck.error || cleanToAddress}`,
+        );
+      }
 
       // 1. 查找并校验支持的代币
       const cleanSymbol = dto.tokenSymbol.trim().toUpperCase();
